@@ -44,7 +44,8 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const path = request.nextUrl.pathname
-  const protectedPaths = ['/conta', '/checkout', '/admin', '/pedido']
+  // /checkout fica aberto: cadastro/login acontece na própria página
+  const protectedPaths = ['/conta', '/admin', '/pedido']
   const needsAuth = protectedPaths.some((p) => path === p || path.startsWith(`${p}/`))
 
   if (needsAuth && !user) {

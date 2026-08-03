@@ -1854,3 +1854,61 @@ footer {
   border-color: #1a1a1a;
   box-shadow: inset 3px 0 0 #c2a84a;
 }
+
+/* Checkout auth embutido */
+.checkout-auth-card {
+  background: #fff;
+  border: 1px solid #ebe7de;
+  padding: 32px 28px;
+}
+.checkout-auth-card h2 {
+  font-family: var(--serif);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-size: 22px;
+  margin: 8px 0 12px;
+  font-weight: 400;
+}
+.checkout-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 24px 0 18px;
+}
+.checkout-auth-tabs button {
+  border: 1px solid #ddd;
+  background: #fff;
+  padding: 12px;
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: var(--sans);
+}
+.checkout-auth-tabs button.is-active {
+  background: #1a1a1a;
+  color: #fff;
+  border-color: #1a1a1a;
+}
+.checkout-auth-form {
+  display: grid;
+  gap: 14px;
+}
+.checkout-auth-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.checkout-auth-form input {
+  padding: 12px 14px;
+  border: 1px solid #ddd;
+  font-size: 14px;
+  font-family: var(--sans);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.checkout-logged-as {
+  margin: -20px 0 28px;
+}
