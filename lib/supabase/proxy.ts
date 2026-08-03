@@ -43,14 +43,14 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (
-    // if the user is not logged in and the app path, in this case, /protected, is accessed, redirect to the login page
-    request.nextUrl.pathname.startsWith('/protected') &&
-    !user
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  const path = request.nextUrl.pathname
+  const protectedPaths = ['/conta', '/checkout', '/admin', '/pedido']
+  const needsAuth = protectedPaths.some((p) => path === p || path.startsWith(`${p}/`))
+
+  if (needsAuth && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
+    url.searchParams.set('next', path)
     return NextResponse.redirect(url)
   }
 

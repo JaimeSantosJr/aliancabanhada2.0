@@ -1,41 +1,42 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { Playfair_Display, Montserrat } from "next/font/google"
-import { Analytics } from "@vercel/analytics/next"
-import "./globals.css"
+import type React from 'react'
+import type { Metadata } from 'next'
+import { Playfair_Display, Montserrat } from 'next/font/google'
+import { Analytics } from '@vercel/analytics/next'
+import { CartProvider } from '@/lib/cart'
+import { SiteShell } from '@/components/site-shell'
+import { Toaster } from 'sonner'
+import './globals.css'
 
 const playfair = Playfair_Display({
-  subsets: ["latin"],
-  variable: "--font-serif",
-  display: "swap",
+  subsets: ['latin'],
+  variable: '--font-serif',
+  display: 'swap',
 })
 
 const montserrat = Montserrat({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
-  title: "Aliança Banhada - Alianças e Solitários Premium",
+  title: 'Aliança Banhada — Alianças e Solitários',
   description:
-    "Aliança Banhada oferece alianças e solitários banhados em ouro com design exclusivo e qualidade premium. Encontre a aliança perfeita para seu momento especial.",
-  generator: "v0.app",
+    'Alianças e solitários em banho de ouro ou ouro. Peças para noivado e casamento com qualidade premium.',
   icons: {
-    icon: "/favicon.png",
-    apple: "/favicon.png",
+    icon: '/favicon.png',
+    apple: '/favicon.png',
   },
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
       <body className={`${playfair.variable} ${montserrat.variable}`}>
-        {children}
+        <CartProvider>
+          <SiteShell>{children}</SiteShell>
+          <Toaster position="top-center" richColors closeButton />
+        </CartProvider>
         <Analytics />
       </body>
     </html>
