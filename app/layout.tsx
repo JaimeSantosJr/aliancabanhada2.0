@@ -24,8 +24,14 @@ export const metadata: Metadata = {
   description:
     'Alianças e solitários em banho de ouro ou ouro. Peças para noivado e casamento com qualidade premium.',
   icons: {
-    icon: '/favicon.png',
-    apple: '/favicon.png',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.png', type: 'image/png' },
+    ],
+    apple: '/apple-icon.png',
+  },
+  appleWebApp: {
+    title: 'Aliança Banhada',
   },
 }
 
