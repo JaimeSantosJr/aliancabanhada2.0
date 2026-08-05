@@ -2,11 +2,13 @@
 
 import { useCart } from '@/lib/cart'
 import { formatPrice } from '@/lib/format'
-import { cartItemKey, cartUnitPrice, formatCartSize, orderSizeLabel } from '@/lib/types'
+import { calcShipping, STORE } from '@/lib/store-config'
+import { cartItemKey, cartUnitPrice, formatCartSize } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAddressByCep, formatCep } from '@/lib/viacep'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 type FormState = {
@@ -22,6 +24,7 @@ type FormState = {
   shipping_zip: string
   payment_method: 'pix' | 'transferencia'
   notes: string
+  website: string // honeypot
 }
 
 type AuthMode = 'signup' | 'login'
@@ -39,10 +42,12 @@ const empty: FormState = {
   shipping_zip: '',
   payment_method: 'pix',
   notes: '',
+  website: '',
 }
 
-function OrderSummary() {
+function OrderSummary({ shipping }: { shipping: number }) {
   const { items, subtotal } = useCart()
+  const total = subtotal + shipping
   return (
     <aside className="cart-summary">
       <h2>Pedido</h2>
@@ -57,7 +62,19 @@ function OrderSummary() {
           </li>
         ))}
       </ul>
-      <p className="summary-total"><span>Total</span><strong>{formatPrice(subtotal)}</strong></p>
+      <div className="summary-rows" style={{ marginBottom: 12 }}>
+        <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
+        <p>
+          <span>Frete</span>
+          <strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong>
+        </p>
+      </div>
+      <p className="summary-total"><span>Total</span><strong>{formatPrice(total)}</strong></p>
+      {subtotal < STORE.freeShippingFrom && (
+        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+          Frete grátis a partir de {formatPrice(STORE.freeShippingFrom)}.
+        </p>
+      )}
     </aside>
   )
 }
@@ -73,8 +90,11 @@ export default function CheckoutPage() {
   const [authError, setAuthError] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [cepLoading, setCepLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
+
+  const shipping = useMemo(() => calcShipping(subtotal), [subtotal])
 
   const fillFromUser = async (userIdValue: string, email?: string | null) => {
     setUserId(userIdValue)
@@ -105,6 +125,26 @@ export default function CheckoutPage() {
 
   const set = (key: keyof FormState, value: string) => {
     setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  const onCepBlur = async () => {
+    const cep = form.shipping_zip.replace(/\D/g, '')
+    if (cep.length !== 8) return
+    setCepLoading(true)
+    const data = await fetchAddressByCep(cep)
+    setCepLoading(false)
+    if (!data) {
+      toast.error('CEP não encontrado.')
+      return
+    }
+    setForm((f) => ({
+      ...f,
+      shipping_street: data.logradouro || f.shipping_street,
+      shipping_neighborhood: data.bairro || f.shipping_neighborhood,
+      shipping_city: data.localidade || f.shipping_city,
+      shipping_state: data.uf || f.shipping_state,
+      shipping_zip: formatCep(data.cep),
+    }))
   }
 
   const ensureProfile = async (
@@ -196,80 +236,46 @@ export default function CheckoutPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userId || items.length === 0) return
+    if (form.website) return // honeypot
     setLoading(true)
 
-    const orderPayload = {
-      user_id: userId,
-      status: 'pending',
-      total_price: subtotal,
-      customer_name: form.customer_name,
-      customer_email: form.customer_email,
-      customer_phone: form.customer_phone,
-      shipping_street: form.shipping_street,
-      shipping_number: form.shipping_number,
-      shipping_complement: form.shipping_complement || null,
-      shipping_neighborhood: form.shipping_neighborhood,
-      shipping_city: form.shipping_city,
-      shipping_state: form.shipping_state,
-      shipping_zip: form.shipping_zip,
-      payment_method: form.payment_method,
-      payment_status: 'pending',
-      notes: form.notes || null,
-      order_number: `AB-${Date.now().toString().slice(-8)}`,
-    }
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer_name: form.customer_name,
+        customer_email: form.customer_email,
+        customer_phone: form.customer_phone,
+        shipping_street: form.shipping_street,
+        shipping_number: form.shipping_number,
+        shipping_complement: form.shipping_complement,
+        shipping_neighborhood: form.shipping_neighborhood,
+        shipping_city: form.shipping_city,
+        shipping_state: form.shipping_state,
+        shipping_zip: form.shipping_zip,
+        payment_method: form.payment_method,
+        notes: form.notes,
+        items: items.map((i) => ({
+          product_id: i.product.id,
+          quantity: i.quantity,
+          size: i.size,
+          size2: i.size2,
+          isPair: i.isPair,
+        })),
+      }),
+    })
 
-    const { data: order, error } = await supabase
-      .from('orders')
-      .insert(orderPayload)
-      .select('*')
-      .single()
-
-    if (error || !order) {
-      setLoading(false)
-      console.error(error)
-      if (error?.message?.includes('column') || error?.code === 'PGRST204') {
-        toast.error('Banco desatualizado. Execute supabase/schema.sql no Supabase.')
-      } else {
-        toast.error(error?.message || 'Não foi possível criar o pedido.')
-      }
-      return
-    }
-
-    const lines = items.map((i) => ({
-      order_id: order.id,
-      product_id: i.product.id,
-      quantity: i.quantity,
-      unit_price: cartUnitPrice(i),
-      size: orderSizeLabel(i),
-      product_name: i.isPair ? `${i.product.name} (Par)` : i.product.name,
-    }))
-
-    const { error: itemsError } = await supabase.from('order_items').insert(lines)
+    const data = await res.json()
     setLoading(false)
 
-    if (itemsError) {
-      console.error(itemsError)
-      toast.error('Pedido criado, mas itens falharam. Contate o suporte com o nº do pedido.')
-      router.push(`/pedido/${order.id}`)
+    if (!res.ok) {
+      toast.error(data.error || 'Não foi possível criar o pedido.')
       return
     }
-
-    await supabase.from('profiles').update({
-      full_name: form.customer_name,
-      phone: form.customer_phone,
-      email: form.customer_email,
-      street: form.shipping_street,
-      number: form.shipping_number,
-      complement: form.shipping_complement || null,
-      neighborhood: form.shipping_neighborhood,
-      city: form.shipping_city,
-      state: form.shipping_state,
-      zip_code: form.shipping_zip,
-    }).eq('id', userId)
 
     clear()
     toast.success('Pedido realizado!')
-    router.push(`/pedido/${order.id}`)
+    router.push(`/pedido/${data.id}`)
   }
 
   if (checkingAuth) return <p className="center-msg page-pad">Carregando checkout...</p>
@@ -283,7 +289,6 @@ export default function CheckoutPage() {
     )
   }
 
-  // Etapa 1: conta rápida sem sair do checkout
   if (!userId) {
     return (
       <div className="container page-pad">
@@ -294,7 +299,6 @@ export default function CheckoutPage() {
             <h2>Para concluir, crie sua conta em 1 minuto</h2>
             <p className="muted">
               Assim você acompanha o pedido e fica com os dados salvos para a próxima compra.
-              O carrinho continua aqui — sem ir para outra página.
             </p>
 
             <div className="checkout-auth-tabs">
@@ -323,7 +327,6 @@ export default function CheckoutPage() {
                       required
                       value={form.customer_name}
                       onChange={(e) => set('customer_name', e.target.value)}
-                      placeholder="Como no documento"
                     />
                   </label>
                   <label>
@@ -332,7 +335,6 @@ export default function CheckoutPage() {
                       required
                       value={form.customer_phone}
                       onChange={(e) => set('customer_phone', e.target.value)}
-                      placeholder="(00) 00000-0000"
                     />
                   </label>
                 </>
@@ -345,7 +347,6 @@ export default function CheckoutPage() {
                   required
                   value={form.customer_email}
                   onChange={(e) => set('customer_email', e.target.value)}
-                  placeholder="seu@email.com"
                   autoComplete="email"
                 />
               </label>
@@ -359,7 +360,6 @@ export default function CheckoutPage() {
                     minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder={authMode === 'signup' ? 'Mínimo 6 caracteres' : 'Sua senha'}
                     autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
                   />
                   <button
@@ -381,16 +381,18 @@ export default function CheckoutPage() {
                     ? 'Criar conta e continuar'
                     : 'Entrar e continuar'}
               </button>
+              <p className="muted" style={{ marginTop: 12, fontSize: 12 }}>
+                <Link href="/auth/forgot-password">Esqueci a senha</Link>
+              </p>
             </form>
           </section>
 
-          <OrderSummary />
+          <OrderSummary shipping={shipping} />
         </div>
       </div>
     )
   }
 
-  // Etapa 2: entrega + pagamento (já autenticado)
   return (
     <div className="container page-pad">
       <h1 className="page-title">Checkout</h1>
@@ -404,7 +406,16 @@ export default function CheckoutPage() {
             <label>Nome completo<input required value={form.customer_name} onChange={(e) => set('customer_name', e.target.value)} /></label>
             <label>Email<input type="email" required value={form.customer_email} onChange={(e) => set('customer_email', e.target.value)} /></label>
             <label>Telefone / WhatsApp<input required value={form.customer_phone} onChange={(e) => set('customer_phone', e.target.value)} /></label>
-            <label>CEP<input required value={form.shipping_zip} onChange={(e) => set('shipping_zip', e.target.value)} /></label>
+            <label>
+              CEP {cepLoading ? '(buscando...)' : ''}
+              <input
+                required
+                value={form.shipping_zip}
+                onChange={(e) => set('shipping_zip', formatCep(e.target.value))}
+                onBlur={onCepBlur}
+                inputMode="numeric"
+              />
+            </label>
             <label className="span-2">Rua<input required value={form.shipping_street} onChange={(e) => set('shipping_street', e.target.value)} /></label>
             <label>Número<input required value={form.shipping_number} onChange={(e) => set('shipping_number', e.target.value)} /></label>
             <label>Complemento<input value={form.shipping_complement} onChange={(e) => set('shipping_complement', e.target.value)} /></label>
@@ -412,6 +423,18 @@ export default function CheckoutPage() {
             <label>Cidade<input required value={form.shipping_city} onChange={(e) => set('shipping_city', e.target.value)} /></label>
             <label>Estado<input required maxLength={2} value={form.shipping_state} onChange={(e) => set('shipping_state', e.target.value.toUpperCase())} /></label>
           </div>
+
+          {/* honeypot */}
+          <input
+            type="text"
+            name="website"
+            value={form.website}
+            onChange={(e) => set('website', e.target.value)}
+            tabIndex={-1}
+            autoComplete="off"
+            style={{ position: 'absolute', left: '-9999px', height: 0, width: 0, opacity: 0 }}
+            aria-hidden="true"
+          />
 
           <h2>Pagamento</h2>
           <div className="payment-options">
@@ -425,8 +448,8 @@ export default function CheckoutPage() {
             </label>
           </div>
           <p className="muted">
-            Após o pedido, você recebe as instruções de pagamento. Confirmamos o PIX/transferência
-            e iniciamos o preparo da sua aliança ou solitário.
+            Após confirmar, você verá a chave PIX e o valor exato na página do pedido.
+            Prazo de envio estimado: {STORE.shippingDaysMin}–{STORE.shippingDaysMax} dias úteis após a confirmação.
           </p>
           <label>Observações<textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} /></label>
         </div>
@@ -444,7 +467,11 @@ export default function CheckoutPage() {
               </li>
             ))}
           </ul>
-          <p className="summary-total"><span>Total</span><strong>{formatPrice(subtotal)}</strong></p>
+          <div className="summary-rows" style={{ marginBottom: 12 }}>
+            <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
+            <p><span>Frete</span><strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong></p>
+          </div>
+          <p className="summary-total"><span>Total</span><strong>{formatPrice(subtotal + shipping)}</strong></p>
           <button type="submit" className="btn btn-block" disabled={loading}>
             {loading ? 'Enviando...' : 'Confirmar pedido'}
           </button>

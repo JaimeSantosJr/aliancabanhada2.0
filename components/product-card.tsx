@@ -7,7 +7,7 @@ export function ProductCard({ product }: { product: Product }) {
     <Link href={productHref(product)} className="product-card product-card-link">
       <div className="product-image-container">
         <img
-          src={product.image_url || 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=800'}
+          src={product.image_url || '/products/alianca-canal-escovada.png'}
           alt={product.name}
         />
       </div>

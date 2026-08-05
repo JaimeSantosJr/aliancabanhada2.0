@@ -47,6 +47,9 @@ export interface Order {
   user_id: string
   status: string
   total_price: number
+  subtotal?: number | null
+  shipping_cost?: number | null
+  tracking_code?: string | null
   customer_name?: string | null
   customer_email?: string | null
   customer_phone?: string | null

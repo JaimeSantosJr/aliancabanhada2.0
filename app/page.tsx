@@ -1,5 +1,6 @@
 'use client'
 
+import { BrandHero } from '@/components/brand-hero'
 import { ProductCard } from '@/components/product-card'
 import type { Product } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
@@ -17,48 +18,41 @@ export default function Home() {
         .from('products')
         .select('*')
         .eq('in_stock', true)
+        .eq('category', 'alianca')
         .order('created_at', { ascending: false })
-        .limit(6)
+        .limit(9)
       setProducts((data as Product[]) || [])
       setLoading(false)
     }
     load()
   }, [])
 
+  const tileAliancas = '/products/alianca-par-jateada.png'
+  const tileBanho = '/products/alianca-canal-escovada.png'
+  const tileOuro = '/products/alianca-escovada-chanfrada.png'
+  const storyImg = '/products/alianca-meio-brilho-glitter.png'
+  const customImg = '/products/alianca-batimentos.png'
+
   return (
     <>
-      <section className="hero">
-        <img
-          src="https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=2070"
-          alt="Alianças e solitários Aliança Banhada"
-          className="hero-img"
-        />
-        <div className="hero-content reveal">
-          <p>Alianças &amp; Solitários</p>
-          <h1>Aliança Banhada</h1>
-          <p className="hero-sub">Banho de ouro ou ouro — para o sim que permanece.</p>
-          <Link href="/loja" className="btn">
-            Ver coleção
-          </Link>
-        </div>
-      </section>
+      <BrandHero />
 
       <div className="container category-strip">
         <Link href="/loja?categoria=alianca" className="category-tile">
-          <img src="https://images.unsplash.com/photo-1605100804763-247f67b3557e?q=80&w=900" alt="Alianças" />
+          <img src={tileAliancas} alt="Alianças" />
           <span>Alianças</span>
         </Link>
-        <Link href="/loja?categoria=solitario" className="category-tile">
-          <img src="https://images.unsplash.com/photo-1605100804763-247f67b3557e?q=80&w=900" alt="Solitários" />
-          <span>Solitários</span>
-        </Link>
         <Link href="/loja?material=Ouro+banhado" className="category-tile">
-          <img src="https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?q=80&w=900" alt="Banho de ouro" />
+          <img src={tileBanho} alt="Banho de ouro" />
           <span>Banho de ouro</span>
         </Link>
         <Link href="/loja?material=Ouro" className="category-tile">
-          <img src="https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=900" alt="Ouro" />
+          <img src={tileOuro} alt="Ouro" />
           <span>Ouro</span>
+        </Link>
+        <Link href="/personalizadas" className="category-tile">
+          <img src={customImg} alt="Personalizadas" />
+          <span>Personalizadas</span>
         </Link>
       </div>
 
@@ -88,16 +82,13 @@ export default function Home() {
         <div className="container">
           <div className="feature-block">
             <div className="feature-image">
-              <img
-                src="https://images.unsplash.com/photo-1611591437281-460bfbe1220a?q=80&w=1200"
-                alt="Oficina de alianças"
-              />
+              <img src={storyImg} alt="Oficina de alianças" />
             </div>
             <div className="feature-text">
               <h2>&quot;Alianças que eternizam o sim.&quot;</h2>
               <p>
-                Trabalhamos apenas alianças e solitários — em banho de ouro premium ou ouro —
-                com acabamento cuidadoso e tamanhos precisos para o dia a dia e a cerimônia.
+                Trabalhamos alianças em banho de ouro premium ou ouro, com acabamento
+                cuidadoso e tamanhos precisos para o dia a dia e a cerimônia.
               </p>
               <Link href="/contato" className="btn btn-outline">
                 Nossa história
@@ -114,17 +105,14 @@ export default function Home() {
               <h2>Personalizadas</h2>
               <p>
                 Grave iniciais, escolha o material e o tamanho. Contamos com artesãos para
-                criar a aliança ou o solitário do seu jeito.
+                criar a aliança do seu jeito.
               </p>
               <Link href="/personalizadas" className="btn">
                 Solicitar agora
               </Link>
             </div>
             <div className="feature-image">
-              <img
-                src="https://images.unsplash.com/photo-1512163143273-bde0e3cc7407?q=80&w=1200"
-                alt="Aliança personalizada"
-              />
+              <img src={customImg} alt="Aliança personalizada" />
             </div>
           </div>
         </div>

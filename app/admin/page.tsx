@@ -34,6 +34,7 @@ type ContactMessage = {
   subject: string | null
   message: string
   created_at: string
+  is_read?: boolean
 }
 
 type Subscriber = { id: string; email: string; created_at: string }
@@ -81,6 +82,8 @@ export default function AdminPage() {
   const [form, setForm] = useState(emptyProduct)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [savingProduct, setSavingProduct] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [trackingDraft, setTrackingDraft] = useState('')
   const [query, setQuery] = useState('')
   const [orderQuery, setOrderQuery] = useState('')
   const [orderFilter, setOrderFilter] = useState('all')
@@ -196,7 +199,7 @@ export default function AdminPage() {
       name: form.name.trim(),
       description: form.description.trim(),
       price: Number(form.price),
-      image_url: form.image_url || 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=800',
+      image_url: form.image_url || '/products/alianca-canal-escovada.png',
       category: form.category,
       material: form.material,
       size_range: form.size_range,
@@ -250,9 +253,58 @@ export default function AdminPage() {
 
   const openOrder = async (order: Order) => {
     setSelectedOrder(order)
+    setTrackingDraft(order.tracking_code || '')
     const { data, error } = await supabase.from('order_items').select('*').eq('order_id', order.id)
     if (error) toast.error(error.message)
     setOrderItems((data as OrderItemRow[]) || [])
+  }
+
+  const saveTracking = async () => {
+    if (!selectedOrder) return
+    const { error } = await supabase
+      .from('orders')
+      .update({ tracking_code: trackingDraft.trim() || null })
+      .eq('id', selectedOrder.id)
+    if (error) return toast.error(error.message)
+    toast.success('Rastreio salvo')
+    setSelectedOrder({ ...selectedOrder, tracking_code: trackingDraft.trim() || null })
+    await reload()
+  }
+
+  const uploadProductImage = async (file: File | null) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Envie um arquivo de imagem.')
+      return
+    }
+    setUploading(true)
+    const ext = file.name.split('.').pop() || 'jpg'
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+    const { error } = await supabase.storage.from('product-images').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+    })
+    if (error) {
+      setUploading(false)
+      toast.error(
+        error.message.includes('Bucket') || error.message.includes('not found')
+          ? 'Execute supabase/hardening.sql (bucket product-images).'
+          : error.message,
+      )
+      return
+    }
+    const { data } = supabase.storage.from('product-images').getPublicUrl(path)
+    setForm((f) => ({ ...f, image_url: data.publicUrl }))
+    setUploading(false)
+    toast.success('Imagem enviada')
+  }
+
+  const markMessageRead = async (id: string) => {
+    const { error } = await supabase.from('contact_messages').update({ is_read: true }).eq('id', id)
+    if (error) toast.error(error.message)
+    else {
+      setMessages((list) => list.map((m) => (m.id === id ? { ...m, is_read: true } : m)))
+    }
   }
 
   const setOrderStatus = async (id: string, status: string) => {
@@ -425,7 +477,17 @@ export default function AdminPage() {
                 <label>Nome<input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
                 <label>Preço (R$)<input type="number" min="0" step="0.01" required value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} /></label>
                 <label className="span-2">Descrição<textarea required rows={3} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
-                <label className="span-2">URL da imagem<input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://..." /></label>
+                <label className="span-2">URL da imagem<input value={form.image_url} onChange={(e) => setForm({ ...form, image_url: e.target.value })} placeholder="https://... ou faça upload" /></label>
+                <label className="span-2">
+                  Upload da imagem
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploading}
+                    onChange={(e) => uploadProductImage(e.target.files?.[0] || null)}
+                  />
+                  {uploading ? <small>Enviando...</small> : null}
+                </label>
                 <label>
                   Categoria
                   <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
@@ -575,6 +637,18 @@ export default function AdminPage() {
                     <span>Total</span>
                     <strong>{formatPrice(selectedOrder.total_price)}</strong>
                   </p>
+                  <label style={{ display: 'block', marginBottom: 12 }}>
+                    Código de rastreio
+                    <input
+                      value={trackingDraft}
+                      onChange={(e) => setTrackingDraft(e.target.value)}
+                      placeholder="BR123456789BR"
+                      style={{ width: '100%', marginTop: 6 }}
+                    />
+                  </label>
+                  <button type="button" className="admin-btn" onClick={saveTracking} style={{ marginBottom: 16 }}>
+                    Salvar rastreio
+                  </button>
                   <div className="admin-status-actions">
                     {STATUS_FLOW.map((s) => (
                       <button
@@ -628,14 +702,19 @@ export default function AdminPage() {
             <div className="admin-card">
               <ul className="admin-inbox">
                 {messages.map((m) => (
-                  <li key={m.id}>
+                  <li key={m.id} style={{ opacity: m.is_read ? 0.7 : 1 }}>
                     <div>
-                      <strong>{m.name}</strong>
+                      <strong>{m.name}{!m.is_read ? ' · Nova' : ''}</strong>
                       <span>{m.email}{m.phone ? ` · ${m.phone}` : ''}</span>
                       <p><em>{m.subject || 'Sem assunto'}</em></p>
                       <p>{m.message}</p>
                       <small>{new Date(m.created_at).toLocaleString('pt-BR')}</small>
                     </div>
+                    {!m.is_read && (
+                      <div className="admin-row-actions">
+                        <button type="button" onClick={() => markMessageRead(m.id)}>Marcar lida</button>
+                      </div>
+                    )}
                   </li>
                 ))}
                 {messages.length === 0 && <li className="empty">Nenhuma mensagem.</li>}

@@ -1,16 +1,18 @@
 'use client'
 
 import { formatPrice } from '@/lib/format'
+import { STORE } from '@/lib/store-config'
 import { ORDER_STATUS_LABELS } from '@/lib/types'
 import type { Order, OrderItem } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 export default function PedidoPage() {
   const { id } = useParams<{ id: string }>()
-  const [order, setOrder] = useState<Order | null>(null)
+  const [order, setOrder] = useState<(Order & { shipping_cost?: number; subtotal?: number; tracking_code?: string }) | null>(null)
   const [items, setItems] = useState<OrderItem[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
@@ -20,11 +22,11 @@ export default function PedidoPage() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        router.replace('/auth/login')
+        router.replace(`/auth/login?next=/pedido/${id}`)
         return
       }
       const { data: o } = await supabase.from('orders').select('*').eq('id', id).maybeSingle()
-      setOrder(o as Order | null)
+      setOrder(o as typeof order)
       if (o) {
         const { data: lines } = await supabase.from('order_items').select('*').eq('order_id', id)
         setItems((lines as OrderItem[]) || [])
@@ -33,6 +35,15 @@ export default function PedidoPage() {
     }
     load()
   }, [id])
+
+  const copyPix = async () => {
+    try {
+      await navigator.clipboard.writeText(STORE.pixKey)
+      toast.success('Chave PIX copiada.')
+    } catch {
+      toast.error('Não foi possível copiar. Copie manualmente.')
+    }
+  }
 
   if (loading) return <p className="center-msg page-pad">Carregando pedido...</p>
   if (!order) {
@@ -44,6 +55,9 @@ export default function PedidoPage() {
     )
   }
 
+  const shipping = Number(order.shipping_cost || 0)
+  const subtotal = Number(order.subtotal || order.total_price - shipping)
+
   return (
     <div className="container page-pad">
       <h1 className="page-title">Pedido {order.order_number || order.id.slice(0, 8)}</h1>
@@ -54,15 +68,45 @@ export default function PedidoPage() {
         )}
       </div>
 
+      {order.tracking_code && (
+        <div className="pix-box" style={{ marginBottom: 24 }}>
+          <h2>Rastreio</h2>
+          <p>Código: <strong>{order.tracking_code}</strong></p>
+        </div>
+      )}
+
       {(order.payment_status === 'pending' || order.status === 'pending') && (
         <div className="pix-box">
           <h2>Como pagar</h2>
           <p>
-            Faça o PIX ou transferência no valor de <strong>{formatPrice(order.total_price)}</strong> e
-            envie o comprovante no WhatsApp informado no email de confirmação / página de contato.
+            Valor: <strong>{formatPrice(order.total_price)}</strong>
           </p>
-          <p className="muted">Chave PIX e dados bancários: configure com a loja (Contato).</p>
-          <Link href="/contato" className="btn btn-outline">Falar com a loja</Link>
+          {order.payment_method === 'pix' ? (
+            <>
+              <p>Beneficiário: <strong>{STORE.pixBeneficiary}</strong></p>
+              <p>
+                Chave PIX ({STORE.pixKeyType}): <strong>{STORE.pixKey}</strong>
+              </p>
+              <button type="button" className="btn" onClick={copyPix}>
+                Copiar chave PIX
+              </button>
+              <p className="muted" style={{ marginTop: 12 }}>
+                Após pagar, envie o comprovante pelo contato da loja. Confirmamos e iniciamos o preparo.
+              </p>
+            </>
+          ) : (
+            <p>
+              Transferência bancária.
+              {STORE.bankName ? (
+                <> Banco {STORE.bankName} · Ag. {STORE.bankAgency} · Conta {STORE.bankAccount}</>
+              ) : (
+                <> Fale conosco para os dados bancários.</>
+              )}
+            </p>
+          )}
+          <Link href="/contato" className="btn btn-outline" style={{ marginTop: 12, display: 'inline-block' }}>
+            Enviar comprovante
+          </Link>
         </div>
       )}
 
@@ -72,7 +116,7 @@ export default function PedidoPage() {
           <li key={item.id}>
             <span>
               {item.product_name || 'Peça'}
-              {item.size ? ` · tam. ${item.size}` : ''} × {item.quantity}
+              {item.size ? ` · ${item.size}` : ''} × {item.quantity}
             </span>
             <strong>
               {item.unit_price != null ? formatPrice(Number(item.unit_price) * item.quantity) : '—'}
@@ -80,6 +124,10 @@ export default function PedidoPage() {
           </li>
         ))}
       </ul>
+      <div className="summary-rows" style={{ maxWidth: 420, marginBottom: 8 }}>
+        <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
+        <p><span>Frete</span><strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong></p>
+      </div>
       <p className="summary-total"><span>Total</span><strong>{formatPrice(order.total_price)}</strong></p>
 
       <h2>Entrega</h2>

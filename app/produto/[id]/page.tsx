@@ -112,7 +112,7 @@ export default function ProductPage() {
           <div className="pdp-gallery">
             <div className="pdp-frame">
               <img
-                src={product.image_url || 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?q=80&w=1200'}
+                src={product.image_url || '/products/alianca-canal-escovada.png'}
                 alt={product.name}
               />
               <div className="pdp-shine" aria-hidden />

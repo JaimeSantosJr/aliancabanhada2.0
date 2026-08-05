@@ -24,7 +24,7 @@ export function SiteFooter() {
       return
     }
     setEmail('')
-    setMsg('Inscrito! Você receberá novidades de alianças e solitários.')
+    setMsg('Inscrito! Você receberá novidades de alianças.')
   }
 
   return (
@@ -34,7 +34,7 @@ export function SiteFooter() {
           <div className="footer-col">
             <h4>Sobre</h4>
             <p>
-              Especialistas em alianças e solitários — banho de ouro premium ou ouro —
+              Especialistas em alianças — banho de ouro premium ou ouro —
               para eternizar o seu momento.
             </p>
           </div>
@@ -51,9 +51,9 @@ export function SiteFooter() {
             <h4>Coleções</h4>
             <ul>
               <li><Link href="/loja?categoria=alianca">Alianças</Link></li>
-              <li><Link href="/loja?categoria=solitario">Solitários</Link></li>
               <li><Link href="/loja?material=Ouro+banhado">Banho de ouro</Link></li>
               <li><Link href="/loja?material=Ouro">Ouro</Link></li>
+              <li><Link href="/personalizadas">Personalizadas</Link></li>
             </ul>
           </div>
           <div className="footer-col">

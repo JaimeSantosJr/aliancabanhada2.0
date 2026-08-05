@@ -57,6 +57,13 @@ export default function PersonalizadasPage() {
       return
     }
     toast.success('Solicitação enviada! Entraremos em contato.')
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'custom', name: form.name, email: form.email }),
+      })
+    } catch { /* optional */ }
     setForm((f) => ({
       ...f,
       phone: '',
@@ -72,7 +79,7 @@ export default function PersonalizadasPage() {
       <div className="section-title">
         <h2>Personalizadas</h2>
         <p className="section-sub">
-          Aliança ou solitário sob medida — banho de ouro ou ouro — com gravação e medidas sob consulta.
+          Aliança sob medida — banho de ouro ou ouro — com gravação e medidas sob consulta.
         </p>
       </div>
 

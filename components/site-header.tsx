@@ -63,7 +63,6 @@ export function SiteHeader() {
           <ul>
             <li><Link href="/loja">Loja</Link></li>
             <li><Link href="/loja?categoria=alianca">Alianças</Link></li>
-            <li><Link href="/loja?categoria=solitario">Solitários</Link></li>
             <li><Link href="/personalizadas">Personalizadas</Link></li>
             <li><Link href="/contato">Contato</Link></li>
             {isAdmin && <li><Link href="/admin">Admin</Link></li>}

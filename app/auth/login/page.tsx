@@ -151,6 +151,8 @@ function LoginForm() {
 
         <p className="auth-footer">
           Não tem conta? <Link href="/auth/sign-up">Cadastre-se</Link>
+          {' · '}
+          <Link href="/auth/forgot-password">Esqueci a senha</Link>
         </p>
       </div>
     </div>

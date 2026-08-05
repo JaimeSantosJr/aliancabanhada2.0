@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation'
 const CATEGORIES = [
   { value: '', label: 'Todas' },
   { value: 'alianca', label: 'Alianças' },
-  { value: 'solitario', label: 'Solitários' },
 ]
 
 const MATERIALS = [
