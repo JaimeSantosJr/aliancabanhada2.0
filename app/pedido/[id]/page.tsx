@@ -6,16 +6,24 @@ import { ORDER_STATUS_LABELS } from '@/lib/types'
 import type { Order, OrderItem } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 export default function PedidoPage() {
   const { id } = useParams<{ id: string }>()
-  const [order, setOrder] = useState<(Order & { shipping_cost?: number; subtotal?: number; tracking_code?: string }) | null>(null)
+  const search = useSearchParams()
+  const [order, setOrder] = useState<Order | null>(null)
   const [items, setItems] = useState<OrderItem[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+
+  useEffect(() => {
+    const mp = search.get('mp')
+    if (mp === 'success') toast.success('Pagamento em processamento/aprovado. Atualizando status...')
+    if (mp === 'pending') toast.message('Pagamento pendente. Assim que confirmar, atualizamos o pedido.')
+    if (mp === 'failure') toast.error('Pagamento não concluído. Você pode tentar novamente.')
+  }, [search])
 
   useEffect(() => {
     const load = async () => {
@@ -26,7 +34,7 @@ export default function PedidoPage() {
         return
       }
       const { data: o } = await supabase.from('orders').select('*').eq('id', id).maybeSingle()
-      setOrder(o as typeof order)
+      setOrder(o as Order | null)
       if (o) {
         const { data: lines } = await supabase.from('order_items').select('*').eq('order_id', id)
         setItems((lines as OrderItem[]) || [])
@@ -56,7 +64,10 @@ export default function PedidoPage() {
   }
 
   const shipping = Number(order.shipping_cost || 0)
-  const subtotal = Number(order.subtotal || order.total_price - shipping)
+  const discount = Number(order.discount_amount || 0)
+  const subtotal = Number(order.subtotal ?? order.total_price - shipping + discount)
+  const pending = order.payment_status === 'pending' || order.status === 'pending'
+  const paid = order.payment_status === 'paid' || order.status === 'paid'
 
   return (
     <div className="container page-pad">
@@ -66,6 +77,7 @@ export default function PedidoPage() {
         {order.payment_method && (
           <> · Pagamento: {order.payment_method.toUpperCase()} ({order.payment_status || 'pending'})</>
         )}
+        {order.mp_status ? <> · MP: {order.mp_status}</> : null}
       </div>
 
       {order.tracking_code && (
@@ -75,13 +87,33 @@ export default function PedidoPage() {
         </div>
       )}
 
-      {(order.payment_status === 'pending' || order.status === 'pending') && (
+      {paid && (
+        <div className="pix-box" style={{ marginBottom: 24 }}>
+          <h2>Pagamento confirmado</h2>
+          <p>Recebemos seu pagamento. Em breve sua peça entra em preparo.</p>
+        </div>
+      )}
+
+      {pending && (
         <div className="pix-box">
           <h2>Como pagar</h2>
           <p>
             Valor: <strong>{formatPrice(order.total_price)}</strong>
           </p>
-          {order.payment_method === 'pix' ? (
+          {order.payment_method === 'mercadopago' ? (
+            <>
+              <p className="muted">
+                Pague com PIX ou cartão no Checkout Pro do Mercado Pago.
+              </p>
+              {order.mp_init_point ? (
+                <a href={order.mp_init_point} className="btn">
+                  Ir para o pagamento
+                </a>
+              ) : (
+                <p className="muted">Link de pagamento indisponível. Fale conosco.</p>
+              )}
+            </>
+          ) : order.payment_method === 'pix' ? (
             <>
               <p>Beneficiário: <strong>{STORE.pixBeneficiary}</strong></p>
               <p>
@@ -91,7 +123,7 @@ export default function PedidoPage() {
                 Copiar chave PIX
               </button>
               <p className="muted" style={{ marginTop: 12 }}>
-                Após pagar, envie o comprovante pelo contato da loja. Confirmamos e iniciamos o preparo.
+                Após pagar, envie o comprovante pelo contato da loja.
               </p>
             </>
           ) : (
@@ -105,7 +137,7 @@ export default function PedidoPage() {
             </p>
           )}
           <Link href="/contato" className="btn btn-outline" style={{ marginTop: 12, display: 'inline-block' }}>
-            Enviar comprovante
+            Falar com a loja
           </Link>
         </div>
       )}
@@ -126,7 +158,17 @@ export default function PedidoPage() {
       </ul>
       <div className="summary-rows" style={{ maxWidth: 420, marginBottom: 8 }}>
         <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
+        {discount > 0 && (
+          <p><span>Cupom {order.coupon_code}</span><strong>− {formatPrice(discount)}</strong></p>
+        )}
         <p><span>Frete</span><strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong></p>
+        {(order.shipping_company || order.shipping_service_name) && (
+          <p className="muted" style={{ fontSize: 13 }}>
+            {order.shipping_company}
+            {order.shipping_service_name ? ` · ${order.shipping_service_name}` : ''}
+            {order.shipping_delivery_days ? ` · ${order.shipping_delivery_days} dias úteis` : ''}
+          </p>
+        )}
       </div>
       <p className="summary-total"><span>Total</span><strong>{formatPrice(order.total_price)}</strong></p>
 

@@ -2,15 +2,11 @@
 
 import { useCart } from '@/lib/cart'
 import { categoryLabel, formatPrice, materialLabel } from '@/lib/format'
-import { calcShipping, STORE } from '@/lib/store-config'
 import { cartItemKey, cartUnitPrice, formatCartSize } from '@/lib/types'
 import Link from 'next/link'
-import { useMemo } from 'react'
 
 export default function CarrinhoPage() {
   const { items, subtotal, updateQuantity, removeItem, count, clear } = useCart()
-  const shipping = useMemo(() => calcShipping(subtotal), [subtotal])
-  const total = subtotal + shipping
 
   if (count === 0) {
     return (
@@ -85,23 +81,21 @@ export default function CarrinhoPage() {
               <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
               <p>
                 <span>Frete</span>
-                <strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong>
+                <strong>No checkout</strong>
               </p>
             </div>
             <div className="summary-total-row">
-              <span>Total</span>
-              <strong>{formatPrice(total)}</strong>
+              <span>Subtotal</span>
+              <strong>{formatPrice(subtotal)}</strong>
             </div>
-            {subtotal < STORE.freeShippingFrom && (
-              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-                Frete grátis a partir de {formatPrice(STORE.freeShippingFrom)}.
-              </p>
-            )}
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              Frete cotado por CEP no checkout (Melhor Envio).
+            </p>
             <Link href="/checkout" className="btn btn-block">Finalizar compra</Link>
             <Link href="/loja" className="btn btn-outline btn-block">Continuar comprando</Link>
             <ul className="cart-notes">
               <li>Par de alianças: informe os 2 tamanhos</li>
-              <li>Pagamento por PIX ou transferência</li>
+              <li>Pagamento via Mercado Pago (PIX/cartão)</li>
               <li>1 ano de garantia</li>
             </ul>
           </aside>

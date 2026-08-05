@@ -49,6 +49,12 @@ export interface Order {
   total_price: number
   subtotal?: number | null
   shipping_cost?: number | null
+  discount_amount?: number | null
+  coupon_code?: string | null
+  shipping_service_id?: string | null
+  shipping_service_name?: string | null
+  shipping_company?: string | null
+  shipping_delivery_days?: number | null
   tracking_code?: string | null
   customer_name?: string | null
   customer_email?: string | null
@@ -62,10 +68,28 @@ export interface Order {
   shipping_zip?: string | null
   payment_method?: string | null
   payment_status?: string | null
+  mp_preference_id?: string | null
+  mp_payment_id?: string | null
+  mp_status?: string | null
+  mp_init_point?: string | null
   notes?: string | null
   order_number?: string | null
   created_at: string
   updated_at?: string
+}
+
+export interface Coupon {
+  id: string
+  code: string
+  discount_type: 'percent' | 'fixed'
+  discount_value: number
+  min_subtotal: number
+  max_uses: number | null
+  used_count: number
+  starts_at: string | null
+  ends_at: string | null
+  is_active: boolean
+  created_at?: string
 }
 
 export interface OrderItem {

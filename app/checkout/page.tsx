@@ -2,7 +2,7 @@
 
 import { useCart } from '@/lib/cart'
 import { formatPrice } from '@/lib/format'
-import { calcShipping, STORE } from '@/lib/store-config'
+import { STORE } from '@/lib/store-config'
 import { cartItemKey, cartUnitPrice, formatCartSize } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAddressByCep, formatCep } from '@/lib/viacep'
@@ -22,12 +22,20 @@ type FormState = {
   shipping_city: string
   shipping_state: string
   shipping_zip: string
-  payment_method: 'pix' | 'transferencia'
+  payment_method: 'mercadopago' | 'pix' | 'transferencia'
   notes: string
-  website: string // honeypot
+  website: string
 }
 
 type AuthMode = 'signup' | 'login'
+
+type QuoteOption = {
+  id: string
+  name: string
+  company: string
+  price: number
+  deliveryDays: number
+}
 
 const empty: FormState = {
   customer_name: '',
@@ -40,43 +48,9 @@ const empty: FormState = {
   shipping_city: '',
   shipping_state: '',
   shipping_zip: '',
-  payment_method: 'pix',
+  payment_method: 'mercadopago',
   notes: '',
   website: '',
-}
-
-function OrderSummary({ shipping }: { shipping: number }) {
-  const { items, subtotal } = useCart()
-  const total = subtotal + shipping
-  return (
-    <aside className="cart-summary">
-      <h2>Pedido</h2>
-      <ul className="checkout-items">
-        {items.map((i) => (
-          <li key={cartItemKey(i)}>
-            <span>
-              {i.product.name}
-              {i.isPair ? ' (Par)' : ''} · {formatCartSize(i)} × {i.quantity}
-            </span>
-            <strong>{formatPrice(cartUnitPrice(i) * i.quantity)}</strong>
-          </li>
-        ))}
-      </ul>
-      <div className="summary-rows" style={{ marginBottom: 12 }}>
-        <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
-        <p>
-          <span>Frete</span>
-          <strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong>
-        </p>
-      </div>
-      <p className="summary-total"><span>Total</span><strong>{formatPrice(total)}</strong></p>
-      {subtotal < STORE.freeShippingFrom && (
-        <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Frete grátis a partir de {formatPrice(STORE.freeShippingFrom)}.
-        </p>
-      )}
-    </aside>
-  )
 }
 
 export default function CheckoutPage() {
@@ -91,10 +65,24 @@ export default function CheckoutPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [cepLoading, setCepLoading] = useState(false)
+  const [quotes, setQuotes] = useState<QuoteOption[]>([])
+  const [quoteSource, setQuoteSource] = useState<string>('')
+  const [quoteNote, setQuoteNote] = useState<string | null>(null)
+  const [quoteLoading, setQuoteLoading] = useState(false)
+  const [selectedShippingId, setSelectedShippingId] = useState<string>('')
+  const [couponInput, setCouponInput] = useState('')
+  const [couponCode, setCouponCode] = useState<string | null>(null)
+  const [discount, setDiscount] = useState(0)
+  const [couponLoading, setCouponLoading] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
-  const shipping = useMemo(() => calcShipping(subtotal), [subtotal])
+  const selectedShipping = useMemo(
+    () => quotes.find((q) => q.id === selectedShippingId) || null,
+    [quotes, selectedShippingId],
+  )
+  const shippingCost = selectedShipping?.price ?? 0
+  const total = Math.max(0, subtotal - discount) + shippingCost
 
   const fillFromUser = async (userIdValue: string, email?: string | null) => {
     setUserId(userIdValue)
@@ -123,6 +111,49 @@ export default function CheckoutPage() {
     load()
   }, [])
 
+  const loadQuotes = async (cepRaw: string) => {
+    const cep = cepRaw.replace(/\D/g, '')
+    if (cep.length !== 8) return
+    setQuoteLoading(true)
+    setQuoteNote(null)
+    try {
+      const res = await fetch('/api/shipping/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cep,
+          insuranceValue: Math.max(0, subtotal - discount),
+          quantity: items.reduce((s, i) => s + i.quantity, 0),
+        }),
+      })
+      const data = await res.json()
+      const options = (data.options || []) as QuoteOption[]
+      setQuotes(options)
+      setQuoteSource(data.source || '')
+      setQuoteNote(data.error || null)
+      if (options.length) {
+        setSelectedShippingId((prev) =>
+          options.some((o) => o.id === prev) ? prev : options[0].id,
+        )
+      } else {
+        setSelectedShippingId('')
+      }
+    } catch {
+      setQuotes([])
+      setQuoteNote('Não foi possível cotar o frete agora.')
+    } finally {
+      setQuoteLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const cep = form.shipping_zip.replace(/\D/g, '')
+    if (cep.length === 8 && userId) {
+      loadQuotes(cep)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtotal, discount, userId])
+
   const set = (key: keyof FormState, value: string) => {
     setForm((f) => ({ ...f, [key]: value }))
   }
@@ -145,6 +176,39 @@ export default function CheckoutPage() {
       shipping_state: data.uf || f.shipping_state,
       shipping_zip: formatCep(data.cep),
     }))
+    await loadQuotes(cep)
+  }
+
+  const applyCoupon = async () => {
+    if (!couponInput.trim()) return
+    setCouponLoading(true)
+    try {
+      const res = await fetch('/api/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: couponInput, subtotal }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setCouponCode(null)
+        setDiscount(0)
+        toast.error(data.error || 'Cupom inválido.')
+        return
+      }
+      setCouponCode(data.code)
+      setDiscount(Number(data.discount || 0))
+      toast.success(`Cupom ${data.code} aplicado.`)
+    } catch {
+      toast.error('Não foi possível validar o cupom.')
+    } finally {
+      setCouponLoading(false)
+    }
+  }
+
+  const clearCoupon = () => {
+    setCouponInput('')
+    setCouponCode(null)
+    setDiscount(0)
   }
 
   const ensureProfile = async (
@@ -236,7 +300,11 @@ export default function CheckoutPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userId || items.length === 0) return
-    if (form.website) return // honeypot
+    if (form.website) return
+    if (!selectedShippingId) {
+      toast.error('Selecione uma opção de frete.')
+      return
+    }
     setLoading(true)
 
     const res = await fetch('/api/orders', {
@@ -255,6 +323,8 @@ export default function CheckoutPage() {
         shipping_zip: form.shipping_zip,
         payment_method: form.payment_method,
         notes: form.notes,
+        coupon_code: couponCode || undefined,
+        shipping_service_id: selectedShippingId,
         items: items.map((i) => ({
           product_id: i.product.id,
           quantity: i.quantity,
@@ -275,6 +345,10 @@ export default function CheckoutPage() {
 
     clear()
     toast.success('Pedido realizado!')
+    if (data.checkout_url) {
+      window.location.href = data.checkout_url
+      return
+    }
     router.push(`/pedido/${data.id}`)
   }
 
@@ -387,7 +461,13 @@ export default function CheckoutPage() {
             </form>
           </section>
 
-          <OrderSummary shipping={shipping} />
+          <aside className="cart-summary">
+            <h2>Pedido</h2>
+            <p className="muted" style={{ fontSize: 13 }}>
+              Frete calculado no checkout após informar o CEP.
+            </p>
+            <p className="summary-total"><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
+          </aside>
         </div>
       </div>
     )
@@ -407,7 +487,7 @@ export default function CheckoutPage() {
             <label>Email<input type="email" required value={form.customer_email} onChange={(e) => set('customer_email', e.target.value)} /></label>
             <label>Telefone / WhatsApp<input required value={form.customer_phone} onChange={(e) => set('customer_phone', e.target.value)} /></label>
             <label>
-              CEP {cepLoading ? '(buscando...)' : ''}
+              CEP {cepLoading || quoteLoading ? '(buscando...)' : ''}
               <input
                 required
                 value={form.shipping_zip}
@@ -424,7 +504,32 @@ export default function CheckoutPage() {
             <label>Estado<input required maxLength={2} value={form.shipping_state} onChange={(e) => set('shipping_state', e.target.value.toUpperCase())} /></label>
           </div>
 
-          {/* honeypot */}
+          <h2>Frete</h2>
+          {quoteNote && <p className="muted" style={{ fontSize: 13 }}>{quoteNote}</p>}
+          <div className="shipping-options">
+            {quotes.map((q) => (
+              <label key={q.id} className={selectedShippingId === q.id ? 'is-active' : ''}>
+                <input
+                  type="radio"
+                  name="shipping"
+                  checked={selectedShippingId === q.id}
+                  onChange={() => setSelectedShippingId(q.id)}
+                />
+                <span>
+                  <strong>{q.company}</strong> · {q.name}
+                  <small>
+                    {q.deliveryDays} dias úteis
+                    {quoteSource === 'fallback' ? ' · padrão' : ''}
+                  </small>
+                </span>
+                <em>{formatPrice(q.price)}</em>
+              </label>
+            ))}
+            {!quotes.length && !quoteLoading && (
+              <p className="muted">Informe um CEP válido para ver as opções de frete.</p>
+            )}
+          </div>
+
           <input
             type="text"
             name="website"
@@ -438,18 +543,37 @@ export default function CheckoutPage() {
 
           <h2>Pagamento</h2>
           <div className="payment-options">
+            <label className={form.payment_method === 'mercadopago' ? 'is-active' : ''}>
+              <input
+                type="radio"
+                name="pay"
+                checked={form.payment_method === 'mercadopago'}
+                onChange={() => set('payment_method', 'mercadopago')}
+              />
+              Mercado Pago (PIX / cartão)
+            </label>
             <label className={form.payment_method === 'pix' ? 'is-active' : ''}>
-              <input type="radio" name="pay" checked={form.payment_method === 'pix'} onChange={() => set('payment_method', 'pix')} />
-              PIX
+              <input
+                type="radio"
+                name="pay"
+                checked={form.payment_method === 'pix'}
+                onChange={() => set('payment_method', 'pix')}
+              />
+              PIX manual
             </label>
             <label className={form.payment_method === 'transferencia' ? 'is-active' : ''}>
-              <input type="radio" name="pay" checked={form.payment_method === 'transferencia'} onChange={() => set('payment_method', 'transferencia')} />
+              <input
+                type="radio"
+                name="pay"
+                checked={form.payment_method === 'transferencia'}
+                onChange={() => set('payment_method', 'transferencia')}
+              />
               Transferência
             </label>
           </div>
           <p className="muted">
-            Após confirmar, você verá a chave PIX e o valor exato na página do pedido.
-            Prazo de envio estimado: {STORE.shippingDaysMin}–{STORE.shippingDaysMax} dias úteis após a confirmação.
+            Com Mercado Pago você será redirecionado para a página segura de pagamento.
+            Prazo estimado após confirmação: {selectedShipping?.deliveryDays || STORE.shippingDaysMax} dias úteis.
           </p>
           <label>Observações<textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} /></label>
         </div>
@@ -467,13 +591,48 @@ export default function CheckoutPage() {
               </li>
             ))}
           </ul>
+
+          <div className="coupon-row">
+            <input
+              placeholder="Cupom"
+              value={couponInput}
+              onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+              disabled={Boolean(couponCode)}
+            />
+            {couponCode ? (
+              <button type="button" className="btn btn-outline" onClick={clearCoupon}>
+                Remover
+              </button>
+            ) : (
+              <button type="button" className="btn btn-outline" onClick={applyCoupon} disabled={couponLoading}>
+                {couponLoading ? '...' : 'Aplicar'}
+              </button>
+            )}
+          </div>
+
           <div className="summary-rows" style={{ marginBottom: 12 }}>
             <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
-            <p><span>Frete</span><strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong></p>
+            {discount > 0 && (
+              <p><span>Cupom {couponCode}</span><strong>− {formatPrice(discount)}</strong></p>
+            )}
+            <p>
+              <span>Frete</span>
+              <strong>
+                {!selectedShipping
+                  ? '—'
+                  : shippingCost === 0
+                    ? 'Grátis'
+                    : formatPrice(shippingCost)}
+              </strong>
+            </p>
           </div>
-          <p className="summary-total"><span>Total</span><strong>{formatPrice(subtotal + shipping)}</strong></p>
-          <button type="submit" className="btn btn-block" disabled={loading}>
-            {loading ? 'Enviando...' : 'Confirmar pedido'}
+          <p className="summary-total"><span>Total</span><strong>{formatPrice(total)}</strong></p>
+          <button type="submit" className="btn btn-block" disabled={loading || !selectedShippingId}>
+            {loading
+              ? 'Enviando...'
+              : form.payment_method === 'mercadopago'
+                ? 'Pagar com Mercado Pago'
+                : 'Confirmar pedido'}
           </button>
         </aside>
       </form>

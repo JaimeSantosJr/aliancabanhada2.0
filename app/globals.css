@@ -1260,12 +1260,43 @@ footer {
   display: flex; flex-direction: column; gap: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
 }
 .span-2 { grid-column: span 2; }
-.payment-options { display: flex; gap: 12px; margin-bottom: 12px; }
+.payment-options { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
 .payment-options label {
-  flex: 1; border: 1px solid #ddd; padding: 14px; text-align: center; cursor: pointer;
+  flex: 1; min-width: 140px; border: 1px solid #ddd; padding: 14px; text-align: center; cursor: pointer;
   text-transform: uppercase; letter-spacing: 1px; font-size: 12px;
 }
 .payment-options label.is-active { border-color: #111; background: #111; color: white; }
+
+.shipping-options { display: grid; gap: 10px; margin: 8px 0 22px; }
+.shipping-options label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #e5e5e5;
+  padding: 14px 16px;
+  cursor: pointer;
+  background: #fff;
+}
+.shipping-options label.is-active { border-color: #1a1410; background: #faf6ee; }
+.shipping-options label span { display: grid; gap: 4px; font-size: 14px; }
+.shipping-options label small { color: #8a7350; font-size: 12px; letter-spacing: 0.04em; }
+.shipping-options label em { font-style: normal; font-weight: 600; white-space: nowrap; }
+
+.coupon-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  margin: 14px 0 18px;
+}
+.coupon-row input {
+  width: 100%;
+  border: 1px solid #ddd;
+  padding: 12px 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .checkout-items { list-style: none; margin-bottom: 16px; }
 .checkout-items li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; }
 .summary-total { display: flex; justify-content: space-between; font-size: 16px; margin: 16px 0 24px; }

@@ -1,5 +1,8 @@
-import { calcShipping, STORE } from '@/lib/store-config'
-import { createRouteClient } from '@/lib/supabase/route'
+import { validateCoupon } from '@/lib/coupons'
+import { resolveSelectedShipping } from '@/lib/melhor-envio'
+import { createCheckoutPreference, isMercadoPagoConfigured } from '@/lib/mercado-pago'
+import { STORE } from '@/lib/store-config'
+import { createRouteClient, createServiceClient } from '@/lib/supabase/route'
 import { NextResponse } from 'next/server'
 
 type IncomingItem = {
@@ -21,8 +24,10 @@ type Body = {
   shipping_city: string
   shipping_state: string
   shipping_zip: string
-  payment_method: 'pix' | 'transferencia'
+  payment_method?: 'mercadopago' | 'pix' | 'transferencia'
   notes?: string
+  coupon_code?: string
+  shipping_service_id?: string
   items: IncomingItem[]
 }
 
@@ -90,8 +95,48 @@ export async function POST(request: Request) {
       })
     }
 
-    const shipping_cost = calcShipping(subtotal)
-    const total_price = Number((subtotal + shipping_cost).toFixed(2))
+    subtotal = Number(subtotal.toFixed(2))
+
+    // Cupom (validado no servidor)
+    let discount_amount = 0
+    let coupon_code: string | null = null
+    let couponId: string | null = null
+    if (body.coupon_code?.trim()) {
+      const db = createServiceClient() || supabase
+      const couponResult = await validateCoupon(db, body.coupon_code, subtotal)
+      if (!couponResult.ok) {
+        return NextResponse.json({ error: couponResult.error }, { status: 400 })
+      }
+      discount_amount = couponResult.discount
+      coupon_code = couponResult.code
+      couponId = couponResult.coupon.id
+    }
+
+    const afterDiscount = Number(Math.max(0, subtotal - discount_amount).toFixed(2))
+
+    const shipping = await resolveSelectedShipping({
+      destinationCep: body.shipping_zip,
+      insuranceValue: afterDiscount,
+      selectedId: body.shipping_service_id,
+      quantity: Math.max(
+        1,
+        lines.reduce((s, l) => s + l.quantity, 0),
+      ),
+    })
+
+    const shipping_cost = Number(shipping.price.toFixed(2))
+    const total_price = Number((afterDiscount + shipping_cost).toFixed(2))
+
+    const mpEnabled = isMercadoPagoConfigured()
+    let payment_method: 'mercadopago' | 'pix' | 'transferencia' = 'pix'
+    if (body.payment_method === 'transferencia') payment_method = 'transferencia'
+    else if (body.payment_method === 'mercadopago' || (mpEnabled && body.payment_method !== 'pix')) {
+      payment_method = mpEnabled ? 'mercadopago' : 'pix'
+    } else if (body.payment_method === 'pix') {
+      payment_method = 'pix'
+    } else if (mpEnabled) {
+      payment_method = 'mercadopago'
+    }
 
     const { data: orderNumber } = await supabase.rpc('next_order_number')
     const order_number =
@@ -100,8 +145,14 @@ export async function POST(request: Request) {
     const orderPayload = {
       user_id: user.id,
       status: 'pending',
-      subtotal: Number(subtotal.toFixed(2)),
+      subtotal,
+      discount_amount,
+      coupon_code,
       shipping_cost,
+      shipping_service_id: shipping.id,
+      shipping_service_name: shipping.name,
+      shipping_company: shipping.company,
+      shipping_delivery_days: shipping.deliveryDays,
       total_price,
       customer_name: body.customer_name.trim(),
       customer_email: body.customer_email.trim().toLowerCase(),
@@ -113,7 +164,7 @@ export async function POST(request: Request) {
       shipping_city: body.shipping_city.trim(),
       shipping_state: body.shipping_state.trim().toUpperCase().slice(0, 2),
       shipping_zip: body.shipping_zip.replace(/\D/g, ''),
-      payment_method: body.payment_method === 'transferencia' ? 'transferencia' : 'pix',
+      payment_method,
       payment_status: 'pending',
       notes: body.notes?.trim() || null,
       order_number,
@@ -131,7 +182,7 @@ export async function POST(request: Request) {
         {
           error:
             orderErr?.message?.includes('column') || orderErr?.code === 'PGRST204'
-              ? 'Banco desatualizado. Execute supabase/hardening.sql no Supabase.'
+              ? 'Banco desatualizado. Execute supabase/commerce-integrations.sql no Supabase.'
               : orderErr?.message || 'Não foi possível criar o pedido.',
         },
         { status: 500 },
@@ -150,7 +201,16 @@ export async function POST(request: Request) {
       )
     }
 
-    // Atualiza endereço do perfil (sem tocar is_admin)
+    if (couponId && discount_amount > 0) {
+      const db = createServiceClient() || supabase
+      await db.rpc('redeem_coupon', {
+        p_coupon_id: couponId,
+        p_order_id: order.id,
+        p_user_id: user.id,
+        p_discount: discount_amount,
+      })
+    }
+
     await supabase
       .from('profiles')
       .update({
@@ -167,14 +227,45 @@ export async function POST(request: Request) {
       })
       .eq('id', user.id)
 
-    // Baixa estoque quando aplicável
     try {
       await supabase.rpc('mark_products_sold', { p_ids: ids })
     } catch {
-      /* opcional se RPC ainda não existir */
+      /* opcional */
     }
 
-    // E-mail opcional (Resend)
+    let checkoutUrl: string | null = null
+    if (payment_method === 'mercadopago' && mpEnabled) {
+      try {
+        // Item único = total final (subtotal − cupom + frete), evita divergência
+        const pref = await createCheckoutPreference({
+          orderId: order.id,
+          orderNumber: order.order_number || order_number,
+          total: total_price,
+          shippingCost: 0,
+          items: [
+            {
+              title: `Pedido ${order.order_number || order_number} — ${STORE.name}`,
+              quantity: 1,
+              unit_price: total_price,
+            },
+          ],
+          payerEmail: orderPayload.customer_email,
+          payerName: orderPayload.customer_name,
+        })
+
+        checkoutUrl = pref.initPoint
+        await supabase
+          .from('orders')
+          .update({
+            mp_preference_id: pref.preferenceId,
+            mp_init_point: checkoutUrl,
+          })
+          .eq('id', order.id)
+      } catch (e) {
+        console.error('mp preference', e)
+      }
+    }
+
     try {
       const { sendOrderEmails } = await import('@/lib/email')
       await sendOrderEmails({
@@ -183,9 +274,13 @@ export async function POST(request: Request) {
         customerEmail: orderPayload.customer_email,
         customerName: orderPayload.customer_name,
         total: total_price,
-        paymentMethod: orderPayload.payment_method,
-        subtotal: orderPayload.subtotal,
+        paymentMethod: payment_method,
+        subtotal,
         shippingCost: shipping_cost,
+        discountAmount: discount_amount,
+        couponCode: coupon_code,
+        shippingLabel: `${shipping.company} · ${shipping.name}`,
+        deliveryDays: shipping.deliveryDays,
         items: lines.map((l) => ({
           product_name: l.product_name,
           quantity: l.quantity,
@@ -212,6 +307,10 @@ export async function POST(request: Request) {
       total_price,
       shipping_cost,
       subtotal,
+      discount_amount,
+      coupon_code,
+      payment_method,
+      checkout_url: checkoutUrl,
       pixKey: STORE.pixKey,
       pixBeneficiary: STORE.pixBeneficiary,
     })

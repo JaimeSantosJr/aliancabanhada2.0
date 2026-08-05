@@ -2,14 +2,14 @@
 
 import { categoryLabel, formatPrice, materialLabel } from '@/lib/format'
 import { ORDER_STATUS_LABELS } from '@/lib/types'
-import type { Order, Product } from '@/lib/types'
+import type { Coupon, Order, Product } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
-type Tab = 'overview' | 'products' | 'orders' | 'custom' | 'messages' | 'newsletter'
+type Tab = 'overview' | 'products' | 'orders' | 'coupons' | 'custom' | 'messages' | 'newsletter'
 
 type CustomOrder = {
   id: string
@@ -64,10 +64,21 @@ const NAV: Array<{ id: Tab; label: string }> = [
   { id: 'overview', label: 'Visão geral' },
   { id: 'products', label: 'Produtos' },
   { id: 'orders', label: 'Pedidos' },
+  { id: 'coupons', label: 'Cupons' },
   { id: 'custom', label: 'Personalizadas' },
   { id: 'messages', label: 'Mensagens' },
   { id: 'newsletter', label: 'Newsletter' },
 ]
+
+const emptyCoupon = {
+  code: '',
+  discount_type: 'percent' as 'percent' | 'fixed',
+  discount_value: '',
+  min_subtotal: '0',
+  max_uses: '',
+  ends_at: '',
+  is_active: true,
+}
 
 export default function AdminPage() {
   const [ok, setOk] = useState(false)
@@ -79,6 +90,9 @@ export default function AdminPage() {
   const [customs, setCustoms] = useState<CustomOrder[]>([])
   const [messages, setMessages] = useState<ContactMessage[]>([])
   const [subscribers, setSubscribers] = useState<Subscriber[]>([])
+  const [coupons, setCoupons] = useState<Coupon[]>([])
+  const [couponForm, setCouponForm] = useState(emptyCoupon)
+  const [savingCoupon, setSavingCoupon] = useState(false)
   const [form, setForm] = useState(emptyProduct)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [savingProduct, setSavingProduct] = useState(false)
@@ -96,22 +110,25 @@ export default function AdminPage() {
   const reload = useCallback(async () => {
     setLoadingData(true)
     try {
-      const [p, o, c, m, n] = await Promise.all([
+      const [p, o, c, m, n, cp] = await Promise.all([
         supabase.from('products').select('*').order('created_at', { ascending: false }),
         supabase.from('orders').select('*').order('created_at', { ascending: false }),
         supabase.from('custom_orders').select('*').order('created_at', { ascending: false }),
         supabase.from('contact_messages').select('*').order('created_at', { ascending: false }),
         supabase.from('newsletter_subscribers').select('*').order('created_at', { ascending: false }),
+        supabase.from('coupons').select('*').order('created_at', { ascending: false }),
       ])
 
       if (p.error) toast.error(`Produtos: ${p.error.message}`)
       if (o.error) toast.error(`Pedidos: ${o.error.message}`)
+      if (cp.error && !cp.error.message.includes('coupons')) toast.error(`Cupons: ${cp.error.message}`)
 
       setProducts((p.data as Product[]) || [])
       setOrders((o.data as Order[]) || [])
       setCustoms((c.data as CustomOrder[]) || [])
       setMessages((m.data as ContactMessage[]) || [])
       setSubscribers((n.data as Subscriber[]) || [])
+      setCoupons((cp.data as Coupon[]) || [])
     } finally {
       setLoadingData(false)
     }
@@ -323,6 +340,45 @@ export default function AdminPage() {
     if (error) return toast.error(error.message)
     toast.success('Solicitação atualizada')
     await reload()
+  }
+
+  const saveCoupon = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const code = couponForm.code.trim().toUpperCase()
+    const discount_value = Number(couponForm.discount_value)
+    if (!code || !discount_value || discount_value <= 0) {
+      toast.error('Informe código e valor do desconto.')
+      return
+    }
+    setSavingCoupon(true)
+    const payload = {
+      code,
+      discount_type: couponForm.discount_type,
+      discount_value,
+      min_subtotal: Number(couponForm.min_subtotal || 0),
+      max_uses: couponForm.max_uses ? Number(couponForm.max_uses) : null,
+      ends_at: couponForm.ends_at ? new Date(couponForm.ends_at).toISOString() : null,
+      is_active: couponForm.is_active,
+    }
+    const { error } = await supabase.from('coupons').insert(payload)
+    setSavingCoupon(false)
+    if (error) {
+      toast.error(
+        error.message.includes('coupons') || error.code === '42P01'
+          ? 'Execute supabase/commerce-integrations.sql no Supabase.'
+          : error.message,
+      )
+      return
+    }
+    toast.success('Cupom criado')
+    setCouponForm(emptyCoupon)
+    await reload()
+  }
+
+  const toggleCoupon = async (c: Coupon) => {
+    const { error } = await supabase.from('coupons').update({ is_active: !c.is_active }).eq('id', c.id)
+    if (error) toast.error(error.message)
+    else await reload()
   }
 
   const logout = async () => {
@@ -633,6 +689,22 @@ export default function AdminPage() {
                       </li>
                     ))}
                   </ul>
+                  {(selectedOrder.discount_amount || 0) > 0 && (
+                    <p className="admin-meta">
+                      Cupom {selectedOrder.coupon_code}: − {formatPrice(Number(selectedOrder.discount_amount))}
+                    </p>
+                  )}
+                  {(selectedOrder.shipping_company || selectedOrder.shipping_service_name) && (
+                    <p className="admin-meta">
+                      Frete: {selectedOrder.shipping_company}
+                      {selectedOrder.shipping_service_name ? ` · ${selectedOrder.shipping_service_name}` : ''}
+                      {' · '}
+                      {formatPrice(Number(selectedOrder.shipping_cost || 0))}
+                    </p>
+                  )}
+                  {selectedOrder.mp_payment_id && (
+                    <p className="admin-meta">MP payment: {selectedOrder.mp_payment_id}</p>
+                  )}
                   <p className="summary-total">
                     <span>Total</span>
                     <strong>{formatPrice(selectedOrder.total_price)}</strong>
@@ -663,6 +735,127 @@ export default function AdminPage() {
                   </div>
                 </>
               )}
+            </div>
+          </section>
+        )}
+
+        {tab === 'coupons' && (
+          <section className="admin-section admin-products">
+            <form className="admin-card admin-form" onSubmit={saveCoupon}>
+              <h2>Novo cupom</h2>
+              <div className="admin-form-grid">
+                <label>
+                  Código
+                  <input
+                    required
+                    value={couponForm.code}
+                    onChange={(e) => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })}
+                    placeholder="ALIANCA10"
+                  />
+                </label>
+                <label>
+                  Tipo
+                  <select
+                    value={couponForm.discount_type}
+                    onChange={(e) =>
+                      setCouponForm({
+                        ...couponForm,
+                        discount_type: e.target.value as 'percent' | 'fixed',
+                      })
+                    }
+                  >
+                    <option value="percent">Percentual (%)</option>
+                    <option value="fixed">Valor fixo (R$)</option>
+                  </select>
+                </label>
+                <label>
+                  Valor
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={couponForm.discount_value}
+                    onChange={(e) => setCouponForm({ ...couponForm, discount_value: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Pedido mínimo (R$)
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={couponForm.min_subtotal}
+                    onChange={(e) => setCouponForm({ ...couponForm, min_subtotal: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Limite de usos
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Ilimitado"
+                    value={couponForm.max_uses}
+                    onChange={(e) => setCouponForm({ ...couponForm, max_uses: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Validade
+                  <input
+                    type="date"
+                    value={couponForm.ends_at}
+                    onChange={(e) => setCouponForm({ ...couponForm, ends_at: e.target.value })}
+                  />
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={couponForm.is_active}
+                    onChange={(e) => setCouponForm({ ...couponForm, is_active: e.target.checked })}
+                  />
+                  Ativo
+                </label>
+              </div>
+              <div className="admin-form-actions">
+                <button type="submit" className="admin-btn" disabled={savingCoupon}>
+                  {savingCoupon ? 'Salvando...' : 'Criar cupom'}
+                </button>
+              </div>
+            </form>
+
+            <div className="admin-card">
+              <div className="admin-card-head">
+                <h2>Cupons ({coupons.length})</h2>
+              </div>
+              <ul className="admin-table dense">
+                {coupons.map((c) => (
+                  <li key={c.id}>
+                    <div>
+                      <strong>{c.code}</strong>
+                      <span>
+                        {c.discount_type === 'percent'
+                          ? `${c.discount_value}%`
+                          : formatPrice(Number(c.discount_value))}
+                        {' · '}
+                        mín. {formatPrice(Number(c.min_subtotal || 0))}
+                        {' · '}
+                        usos {c.used_count}{c.max_uses != null ? `/${c.max_uses}` : ''}
+                      </span>
+                      <span className={`stock-pill ${c.is_active ? 'on' : 'off'}`}>
+                        {c.is_active ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+                    <div className="admin-row-actions">
+                      <button type="button" onClick={() => toggleCoupon(c)}>
+                        {c.is_active ? 'Desativar' : 'Ativar'}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+                {coupons.length === 0 && (
+                  <li className="empty">Nenhum cupom. Execute commerce-integrations.sql se a tabela não existir.</li>
+                )}
+              </ul>
             </div>
           </section>
         )}

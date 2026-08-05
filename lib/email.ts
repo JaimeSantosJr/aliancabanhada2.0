@@ -16,6 +16,10 @@ type OrderMail = {
   paymentMethod: string
   subtotal?: number
   shippingCost?: number
+  discountAmount?: number
+  couponCode?: string | null
+  shippingLabel?: string
+  deliveryDays?: number
   items?: OrderMailItem[]
   address?: {
     street: string
@@ -167,29 +171,49 @@ export async function sendOrderEmails(data: OrderMail) {
 
   const subtotal = data.subtotal ?? data.total
   const shipping = data.shippingCost ?? 0
+  const discount = data.discountAmount ?? 0
   const orderUrl = `${STORE.siteUrl}/pedido/${data.orderId}`
 
+  const paymentLabel =
+    data.paymentMethod === 'mercadopago'
+      ? 'Mercado Pago'
+      : data.paymentMethod === 'pix'
+        ? 'PIX'
+        : 'Transferência'
+
   const paymentBlock =
-    data.paymentMethod === 'pix'
+    data.paymentMethod === 'mercadopago'
       ? `<div style="margin:22px 0 0;padding:20px;background:#f4ecdd;border:1px solid #e4d9c4;">
+          <div style="font-family:${SANS};font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};padding-bottom:10px;">Pagamento Mercado Pago</div>
+          <div style="font-family:${SANS};font-size:13px;color:${INK};line-height:1.7;">Finalize o pagamento na página segura do Mercado Pago (PIX ou cartão). O status será atualizado automaticamente.</div>
+        </div>`
+      : data.paymentMethod === 'pix'
+        ? `<div style="margin:22px 0 0;padding:20px;background:#f4ecdd;border:1px solid #e4d9c4;">
           <div style="font-family:${SANS};font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};padding-bottom:10px;">Pagamento via PIX</div>
           <div style="font-family:${SERIF};font-size:17px;color:${INK};word-break:break-all;">${STORE.pixKey}</div>
           <div style="font-family:${SANS};font-size:12px;color:${MUTED};padding-top:8px;">Favorecido: ${STORE.pixBeneficiary}</div>
           <div style="font-family:${SANS};font-size:12px;color:${MUTED};padding-top:10px;line-height:1.6;">Após o pagamento, envie o comprovante respondendo este e-mail para agilizarmos a produção.</div>
         </div>`
-      : `<div style="margin:22px 0 0;padding:20px;background:#f4ecdd;border:1px solid #e4d9c4;">
+        : `<div style="margin:22px 0 0;padding:20px;background:#f4ecdd;border:1px solid #e4d9c4;">
           <div style="font-family:${SANS};font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};padding-bottom:10px;">Transferência bancária</div>
           <div style="font-family:${SANS};font-size:13px;color:${INK};line-height:1.7;">Responderemos este e-mail com os dados bancários para concluir o pagamento.</div>
         </div>`
+
+  const totalsRows = `
+      ${infoRow('Pedido', data.orderNumber)}
+      ${infoRow('Subtotal', formatBRL(subtotal))}
+      ${discount > 0 ? infoRow(`Cupom${data.couponCode ? ` ${data.couponCode}` : ''}`, `− ${formatBRL(discount)}`) : ''}
+      ${infoRow('Frete', shipping === 0 ? 'Grátis' : formatBRL(shipping))}
+      ${data.shippingLabel ? infoRow('Entrega', data.shippingLabel) : ''}
+      ${data.deliveryDays ? infoRow('Prazo', `${data.deliveryDays} dias úteis`) : ''}
+      ${infoRow('Total', formatBRL(data.total), true)}
+  `
 
   const customerBody = `
     <p style="margin:0 0 18px;">Olá, ${data.customerName}. Recebemos o seu pedido e ele já está reservado.</p>
     ${data.items?.length ? itemsBlock(data.items) : ''}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;">
-      ${infoRow('Pedido', data.orderNumber)}
-      ${infoRow('Subtotal', formatBRL(subtotal))}
-      ${infoRow('Frete', shipping === 0 ? 'Grátis' : formatBRL(shipping))}
-      ${infoRow('Total', formatBRL(data.total), true)}
+      ${totalsRows}
     </table>
     ${paymentBlock}
     ${data.address ? addressBlock(data.address) : ''}
@@ -203,7 +227,8 @@ export async function sendOrderEmails(data: OrderMail) {
       ${infoRow('Pedido', data.orderNumber)}
       ${infoRow('Cliente', data.customerName)}
       ${infoRow('E-mail', data.customerEmail)}
-      ${infoRow('Pagamento', data.paymentMethod === 'pix' ? 'PIX' : 'Transferência')}
+      ${infoRow('Pagamento', paymentLabel)}
+      ${discount > 0 ? infoRow('Desconto', formatBRL(discount)) : ''}
       ${infoRow('Frete', shipping === 0 ? 'Grátis' : formatBRL(shipping))}
       ${infoRow('Total', formatBRL(data.total), true)}
     </table>
@@ -257,6 +282,37 @@ export async function sendSimpleNotify(subject: string, html: string) {
       reply_to: replyTo,
       subject,
       html: layout({ kicker: 'Painel da loja', heading: subject, body: html }),
+    },
+    key,
+  )
+}
+
+export async function sendPaymentApprovedEmail(data: {
+  orderId: string
+  orderNumber: string
+  customerEmail: string
+  customerName: string
+  total: number
+}) {
+  const { key, from, replyTo } = mailMeta()
+  if (!key) return
+  const orderUrl = `${STORE.siteUrl}/pedido/${data.orderId}`
+  await send(
+    {
+      from,
+      to: [data.customerEmail],
+      reply_to: replyTo,
+      subject: `Pagamento confirmado — pedido ${data.orderNumber}`,
+      html: layout({
+        kicker: 'Pagamento aprovado',
+        heading: `Recebemos o pagamento do pedido ${data.orderNumber}`,
+        body: `
+          <p style="margin:0 0 18px;">Olá, ${data.customerName}. Seu pagamento de <strong>${formatBRL(data.total)}</strong> foi confirmado.</p>
+          <p style="margin:0 0 18px;">Já vamos preparar sua peça com carinho.</p>
+          ${button(orderUrl, 'Ver pedido')}
+        `,
+        footNote: 'Obrigada por escolher a Aliança Banhada.',
+      }),
     },
     key,
   )
