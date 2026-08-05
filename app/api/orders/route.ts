@@ -184,6 +184,23 @@ export async function POST(request: Request) {
         customerName: orderPayload.customer_name,
         total: total_price,
         paymentMethod: orderPayload.payment_method,
+        subtotal: orderPayload.subtotal,
+        shippingCost: shipping_cost,
+        items: lines.map((l) => ({
+          product_name: l.product_name,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          size: l.size,
+        })),
+        address: {
+          street: orderPayload.shipping_street,
+          number: orderPayload.shipping_number,
+          complement: orderPayload.shipping_complement,
+          neighborhood: orderPayload.shipping_neighborhood,
+          city: orderPayload.shipping_city,
+          state: orderPayload.shipping_state,
+          zip: orderPayload.shipping_zip,
+        },
       })
     } catch (e) {
       console.warn('email skip', e)
