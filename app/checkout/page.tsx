@@ -124,6 +124,7 @@ export default function CheckoutPage() {
           cep,
           insuranceValue: Math.max(0, subtotal - discount),
           quantity: items.reduce((s, i) => s + i.quantity, 0),
+          productIds: items.map((i) => i.product.id),
         }),
       })
       const data = await res.json()
@@ -234,8 +235,8 @@ export default function CheckoutPage() {
 
     try {
       if (authMode === 'signup') {
-        if (!name || !email || !phone || password.length < 6) {
-          setAuthError('Preencha nome, email, WhatsApp e uma senha com pelo menos 6 caracteres.')
+        if (!name || !email || !phone || password.length < 8) {
+          setAuthError('Preencha nome, email, WhatsApp e uma senha com pelo menos 8 caracteres.')
           setAuthLoading(false)
           return
         }
@@ -278,8 +279,40 @@ export default function CheckoutPage() {
           setAuthLoading(false)
           return
         }
+
+        const gateRes = await fetch('/api/auth/rate-limit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login_check', email }),
+        })
+        const gate = await gateRes.json().catch(() => ({}))
+        if (!gateRes.ok || gate.allowed === false) {
+          setAuthError(gate.error || 'Muitas tentativas. Aguarde um momento.')
+          setAuthLoading(false)
+          return
+        }
+
         const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
+        if (error) {
+          await fetch('/api/auth/rate-limit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'login_fail', email }),
+          })
+          const code = (error as { code?: string }).code
+          if (code === 'invalid_credentials') {
+            setAuthError('Email ou senha inválida.')
+          } else {
+            setAuthError('Não foi possível entrar. Tente de novo ou use “Esqueci a senha”.')
+          }
+          setAuthLoading(false)
+          return
+        }
+        await fetch('/api/auth/rate-limit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'login_success', email }),
+        })
         if (!data.user) throw new Error('Falha ao entrar.')
         await fillFromUser(data.user.id, data.user.email)
         toast.success('Bem-vindo de volta!')
@@ -431,7 +464,7 @@ export default function CheckoutPage() {
                   <input
                     type={showPassword ? 'text' : 'password'}
                     required
-                    minLength={6}
+                    minLength={8}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}

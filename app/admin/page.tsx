@@ -56,6 +56,7 @@ const emptyProduct = {
   material: 'Ouro banhado',
   size_range: '12,13,14,15,16,17,18,19,20,21,22,23,24',
   in_stock: true,
+  free_shipping: false,
 }
 
 const STATUS_FLOW = ['pending', 'paid', 'preparing', 'shipped', 'delivered', 'cancelled'] as const
@@ -221,6 +222,7 @@ export default function AdminPage() {
       material: form.material,
       size_range: form.size_range,
       in_stock: form.in_stock,
+      free_shipping: form.free_shipping,
     }
     const { error } = editingId
       ? await supabase.from('products').update(payload).eq('id', editingId)
@@ -244,6 +246,7 @@ export default function AdminPage() {
       material: p.material,
       size_range: p.size_range || '',
       in_stock: p.in_stock,
+      free_shipping: Boolean(p.free_shipping),
     })
     goTab('products')
   }
@@ -330,6 +333,18 @@ export default function AdminPage() {
     if (status === 'pending') patch.payment_status = 'pending'
     const { error } = await supabase.from('orders').update(patch).eq('id', id)
     if (error) return toast.error(error.message)
+
+    if (status === 'paid') {
+      const { data: items } = await supabase
+        .from('order_items')
+        .select('product_id')
+        .eq('order_id', id)
+      const ids = [...new Set((items || []).map((i) => i.product_id).filter(Boolean))]
+      if (ids.length) {
+        await supabase.rpc('mark_products_sold', { p_ids: ids })
+      }
+    }
+
     toast.success('Status atualizado')
     await reload()
     setSelectedOrder((prev) => (prev?.id === id ? { ...prev, ...patch } : prev))
@@ -563,6 +578,14 @@ export default function AdminPage() {
                   <input type="checkbox" checked={form.in_stock} onChange={(e) => setForm({ ...form, in_stock: e.target.checked })} />
                   Em estoque
                 </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={form.free_shipping}
+                    onChange={(e) => setForm({ ...form, free_shipping: e.target.checked })}
+                  />
+                  Frete grátis
+                </label>
               </div>
               {form.image_url ? (
                 <div className="admin-preview"><img src={form.image_url} alt="Prévia" /></div>
@@ -595,6 +618,7 @@ export default function AdminPage() {
                       <span className={`stock-pill ${p.in_stock ? 'on' : 'off'}`}>
                         {p.in_stock ? 'Em estoque' : 'Indisponível'}
                       </span>
+                      {p.free_shipping ? <span className="stock-pill on">Frete grátis</span> : null}
                     </div>
                     <div className="admin-row-actions">
                       <button type="button" onClick={() => editProduct(p)}>Editar</button>

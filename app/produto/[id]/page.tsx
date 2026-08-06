@@ -230,6 +230,9 @@ export default function ProductPage() {
             </div>
 
             <div className="pdp-cta">
+              {product.free_shipping ? (
+                <p className="muted" style={{ marginBottom: 12 }}>Este produto tem frete grátis.</p>
+              ) : null}
               <button type="button" className="btn" onClick={addToCart} disabled={!product.in_stock}>
                 {product.in_stock
                   ? mode === 'pair'

@@ -10,6 +10,7 @@ export function ProductCard({ product }: { product: Product }) {
           src={product.image_url || '/products/alianca-canal-escovada.png'}
           alt={product.name}
         />
+        {product.free_shipping ? <span className="product-badge">Frete grátis</span> : null}
       </div>
       <div className="product-info">
         <p className="product-meta">

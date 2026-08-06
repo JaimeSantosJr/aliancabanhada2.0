@@ -58,6 +58,13 @@ async function markOrderFromPayment(opts: {
       .eq('id', opts.storeOrderId)
 
     try {
+      const { markOrderProductsSold } = await import('@/lib/stock')
+      await markOrderProductsSold(opts.storeOrderId, supabase)
+    } catch (e) {
+      console.warn('stock paid skip', e)
+    }
+
+    try {
       const { sendPaymentApprovedEmail } = await import('@/lib/email')
       const { data: full } = await supabase
         .from('orders')
@@ -164,6 +171,14 @@ async function processPaymentId(paymentId: string) {
 
 export async function POST(request: Request) {
   try {
+    if (
+      process.env.NODE_ENV === 'production' &&
+      !process.env.MERCADO_PAGO_WEBHOOK_SECRET
+    ) {
+      console.error('webhook mp: MERCADO_PAGO_WEBHOOK_SECRET ausente em produção')
+      return NextResponse.json({ error: 'Webhook não configurado' }, { status: 503 })
+    }
+
     const url = new URL(request.url)
     const body = await request.json().catch(() => ({}))
 

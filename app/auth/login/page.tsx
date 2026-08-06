@@ -18,7 +18,21 @@ function loginErrorMessage(error: unknown): string {
   if (code === 'invalid_credentials') {
     return 'Email ou senha inválida.'
   }
-  return 'Algo deu errado. Tente novamente.'
+  return 'Email ou senha inválida.'
+}
+
+async function rateLimit(action: string, email: string) {
+  try {
+    const res = await fetch('/api/auth/rate-limit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, email }),
+    })
+    const data = await res.json().catch(() => ({}))
+    return { ok: res.ok && data.allowed !== false, error: data.error as string | undefined }
+  } catch {
+    return { ok: true }
+  }
 }
 
 function LoginForm() {
@@ -50,12 +64,28 @@ function LoginForm() {
     setIsLoading(true)
     setError(null)
 
+    const normalizedEmail = email.trim().toLowerCase()
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
+      const gate = await rateLimit('login_check', normalizedEmail)
+      if (!gate.ok) {
+        setError(gate.error || 'Muitas tentativas. Aguarde um momento.')
+        return
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      })
+      if (error) {
+        await rateLimit('login_fail', normalizedEmail)
+        throw error
+      }
+
+      await rateLimit('login_success', normalizedEmail)
 
       try {
-        if (remember) localStorage.setItem(REMEMBER_KEY, email.trim().toLowerCase())
+        if (remember) localStorage.setItem(REMEMBER_KEY, normalizedEmail)
         else localStorage.removeItem(REMEMBER_KEY)
       } catch {
         /* ignore */
@@ -79,7 +109,6 @@ function LoginForm() {
       router.push(destination)
       router.refresh()
     } catch (error: unknown) {
-      console.error('Login error:', error)
       setError(loginErrorMessage(error))
     } finally {
       setIsLoading(false)
@@ -107,7 +136,12 @@ function LoginForm() {
           </label>
 
           <label>
-            Senha
+            <span className="auth-label-row">
+              Senha
+              <Link href="/auth/forgot-password" className="auth-help">
+                Esqueci a senha
+              </Link>
+            </span>
             <div className="password-field">
               <input
                 type={showPassword ? 'text' : 'password'}
@@ -151,8 +185,6 @@ function LoginForm() {
 
         <p className="auth-footer">
           Não tem conta? <Link href="/auth/sign-up">Cadastre-se</Link>
-          {' · '}
-          <Link href="/auth/forgot-password">Esqueci a senha</Link>
         </p>
       </div>
     </div>

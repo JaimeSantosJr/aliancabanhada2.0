@@ -50,7 +50,7 @@ export async function POST(request: Request) {
     const ids = [...new Set(body.items.map((i) => i.product_id))]
     const { data: products, error: prodErr } = await supabase
       .from('products')
-      .select('id,name,price,in_stock')
+      .select('id,name,price,in_stock,free_shipping')
       .in('id', ids)
 
     if (prodErr || !products?.length) {
@@ -113,6 +113,7 @@ export async function POST(request: Request) {
     }
 
     const afterDiscount = Number(Math.max(0, subtotal - discount_amount).toFixed(2))
+    const freeShipping = products.length > 0 && products.every((p) => Boolean(p.free_shipping))
 
     const shipping = await resolveSelectedShipping({
       destinationCep: body.shipping_zip,
@@ -122,6 +123,7 @@ export async function POST(request: Request) {
         1,
         lines.reduce((s, l) => s + l.quantity, 0),
       ),
+      freeShipping,
     })
 
     const shipping_cost = Number(shipping.price.toFixed(2))
@@ -231,11 +233,7 @@ export async function POST(request: Request) {
       })
       .eq('id', user.id)
 
-    try {
-      await supabase.rpc('mark_products_sold', { p_ids: ids })
-    } catch {
-      /* opcional */
-    }
+    // Estoque só baixa após pagamento aprovado (webhook / API de pagamento / admin).
 
     // Checkout Transparente: pagamento na página do pedido (Payment Brick), sem redirect Pro.
     if (payment_method === 'mercadopago' && !mpEnabled) {

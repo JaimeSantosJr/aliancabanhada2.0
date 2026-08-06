@@ -33,14 +33,23 @@ function userAgent() {
   )
 }
 
-export function fallbackShippingOption(insuranceValue?: number): ShippingQuoteOption {
-  const freeTest =
-    typeof insuranceValue === 'number' && insuranceValue > 0 && insuranceValue <= 5.5
+export function freeShippingOption(): ShippingQuoteOption {
+  return {
+    id: 'free',
+    name: 'Frete grátis',
+    company: 'Aliança Banhada',
+    price: 0,
+    deliveryDays: STORE.shippingDaysMax,
+    currency: 'R$',
+  }
+}
+
+export function fallbackShippingOption(): ShippingQuoteOption {
   return {
     id: 'flat',
-    name: freeTest ? 'Frete grátis (pedido teste)' : 'Frete padrão',
+    name: 'Frete padrão',
     company: 'Aliança Banhada',
-    price: freeTest ? 0 : STORE.shippingFlat,
+    price: STORE.shippingFlat,
     deliveryDays: STORE.shippingDaysMax,
     currency: 'R$',
   }
@@ -50,24 +59,21 @@ export async function quoteMelhorEnvio(opts: {
   destinationCep: string
   insuranceValue: number
   quantity?: number
+  freeShipping?: boolean
 }): Promise<{ options: ShippingQuoteOption[]; source: 'melhor_envio' | 'fallback'; error?: string }> {
   const to = opts.destinationCep.replace(/\D/g, '')
   if (to.length !== 8) {
     return { options: [], source: 'fallback', error: 'CEP inválido.' }
   }
 
-  // Pedido de teste (produto R$1–R$5): frete grátis
-  if (opts.insuranceValue > 0 && opts.insuranceValue <= 5.5) {
-    return {
-      options: [fallbackShippingOption(opts.insuranceValue)],
-      source: 'fallback',
-    }
+  if (opts.freeShipping) {
+    return { options: [freeShippingOption()], source: 'fallback' }
   }
 
   const token = process.env.MELHOR_ENVIO_TOKEN
   if (!token) {
     return {
-      options: [fallbackShippingOption(opts.insuranceValue)],
+      options: [fallbackShippingOption()],
       source: 'fallback',
       error: 'Melhor Envio não configurado — usando frete padrão.',
     }
@@ -110,7 +116,7 @@ export async function quoteMelhorEnvio(opts: {
     if (!res.ok) {
       console.warn('melhor envio quote fail', res.status, data)
       return {
-        options: [fallbackShippingOption(opts.insuranceValue)],
+        options: [fallbackShippingOption()],
         source: 'fallback',
         error: 'Cotação indisponível no momento — frete padrão aplicado.',
       }
@@ -132,7 +138,7 @@ export async function quoteMelhorEnvio(opts: {
 
     if (!options.length) {
       return {
-        options: [fallbackShippingOption(opts.insuranceValue)],
+        options: [fallbackShippingOption()],
         source: 'fallback',
         error: 'Nenhuma transportadora disponível — frete padrão aplicado.',
       }
@@ -142,7 +148,7 @@ export async function quoteMelhorEnvio(opts: {
   } catch (e) {
     console.warn('melhor envio quote error', e)
     return {
-      options: [fallbackShippingOption(opts.insuranceValue)],
+      options: [fallbackShippingOption()],
       source: 'fallback',
       error: 'Falha ao consultar frete — frete padrão aplicado.',
     }
@@ -157,9 +163,10 @@ export async function resolveSelectedShipping(opts: {
   insuranceValue: number
   selectedId?: string | null
   quantity?: number
+  freeShipping?: boolean
 }): Promise<ShippingQuoteOption> {
   const { options } = await quoteMelhorEnvio(opts)
-  if (!options.length) return fallbackShippingOption(opts.insuranceValue)
+  if (!options.length) return opts.freeShipping ? freeShippingOption() : fallbackShippingOption()
   if (opts.selectedId) {
     const found = options.find((o) => o.id === opts.selectedId)
     if (found) return found

@@ -60,6 +60,11 @@ export default function Page() {
       setIsLoading(false)
       return
     }
+    if (password.length < 8) {
+      setError('A senha precisa ter pelo menos 8 caracteres.')
+      setIsLoading(false)
+      return
+    }
 
     try {
       const { error } = await supabase.auth.signUp({
@@ -112,6 +117,7 @@ export default function Page() {
                       id="password"
                       type="password"
                       required
+                      minLength={8}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
@@ -124,6 +130,7 @@ export default function Page() {
                       id="repeat-password"
                       type="password"
                       required
+                      minLength={8}
                       value={repeatPassword}
                       onChange={(e) => setRepeatPassword(e.target.value)}
                     />

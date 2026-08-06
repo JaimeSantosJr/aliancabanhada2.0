@@ -11,6 +11,7 @@ export interface Product {
   material: ProductMaterial | string
   size_range: string | null
   in_stock: boolean
+  free_shipping?: boolean | null
   created_at?: string
   updated_at?: string
   slug?: string | null
@@ -68,6 +69,8 @@ export interface Order {
   shipping_zip?: string | null
   payment_method?: string | null
   payment_status?: string | null
+  payment_attempt_count?: number | null
+  payment_last_attempt_at?: string | null
   mp_preference_id?: string | null
   mp_payment_id?: string | null
   mp_status?: string | null
