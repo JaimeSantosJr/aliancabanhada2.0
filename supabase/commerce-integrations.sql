@@ -14,6 +14,18 @@ alter table public.orders
   add column if not exists mp_status text,
   add column if not exists mp_init_point text;
 
+-- Normaliza as constraints antigas para os status usados pelo app.
+-- O schema inicial de alguns projetos aceitava outros nomes e rejeitava "pending".
+alter table public.orders drop constraint if exists orders_status_check;
+alter table public.orders
+  add constraint orders_status_check
+  check (status in ('pending', 'paid', 'preparing', 'shipped', 'delivered', 'cancelled'));
+
+alter table public.orders drop constraint if exists orders_payment_status_check;
+alter table public.orders
+  add constraint orders_payment_status_check
+  check (payment_status in ('pending', 'paid', 'failed', 'refunded'));
+
 -- ========== COUPONS ==========
 create table if not exists public.coupons (
   id uuid primary key default gen_random_uuid(),
