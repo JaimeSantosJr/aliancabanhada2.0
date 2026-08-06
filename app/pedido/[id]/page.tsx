@@ -5,10 +5,16 @@ import { STORE } from '@/lib/store-config'
 import { ORDER_STATUS_LABELS } from '@/lib/types'
 import type { Order, OrderItem } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+
+const MpPaymentBrick = dynamic(() => import('@/components/mp-payment-brick'), {
+  ssr: false,
+  loading: () => <p className="muted">Carregando pagamento seguro...</p>,
+})
 
 export default function PedidoPage() {
   const { id } = useParams<{ id: string }>()
@@ -18,6 +24,25 @@ export default function PedidoPage() {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
+  const loadOrder = useCallback(async () => {
+    const supabase = createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      router.replace(`/auth/login?next=/pedido/${id}`)
+      return null
+    }
+    const { data: o } = await supabase.from('orders').select('*').eq('id', id).maybeSingle()
+    setOrder(o as Order | null)
+    if (o) {
+      const { data: lines } = await supabase.from('order_items').select('*').eq('order_id', id)
+      setItems((lines as OrderItem[]) || [])
+    }
+    setLoading(false)
+    return o as Order | null
+  }, [id, router])
+
   useEffect(() => {
     const mp = search.get('mp')
     if (mp === 'success') toast.success('Pagamento em processamento/aprovado. Atualizando status...')
@@ -26,23 +51,20 @@ export default function PedidoPage() {
   }, [search])
 
   useEffect(() => {
-    const load = async () => {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.replace(`/auth/login?next=/pedido/${id}`)
-        return
-      }
-      const { data: o } = await supabase.from('orders').select('*').eq('id', id).maybeSingle()
-      setOrder(o as Order | null)
-      if (o) {
-        const { data: lines } = await supabase.from('order_items').select('*').eq('order_id', id)
-        setItems((lines as OrderItem[]) || [])
-      }
-      setLoading(false)
-    }
-    load()
-  }, [id])
+    loadOrder()
+  }, [loadOrder])
+
+  // Poll enquanto pendente (webhook / PIX)
+  useEffect(() => {
+    if (!order) return
+    const pending = order.payment_status === 'pending' || order.status === 'pending'
+    if (!pending || order.payment_method !== 'mercadopago') return
+
+    const t = setInterval(() => {
+      loadOrder()
+    }, 8000)
+    return () => clearInterval(t)
+  }, [order, loadOrder])
 
   const copyPix = async () => {
     try {
@@ -68,6 +90,7 @@ export default function PedidoPage() {
   const subtotal = Number(order.subtotal ?? order.total_price - shipping + discount)
   const pending = order.payment_status === 'pending' || order.status === 'pending'
   const paid = order.payment_status === 'paid' || order.status === 'paid'
+  const failed = order.payment_status === 'failed'
 
   return (
     <div className="container page-pad">
@@ -94,24 +117,24 @@ export default function PedidoPage() {
         </div>
       )}
 
-      {pending && (
+      {(pending || failed) && (
         <div className="pix-box">
-          <h2>Como pagar</h2>
+          <h2>{failed ? 'Tentar pagar novamente' : 'Como pagar'}</h2>
           <p>
             Valor: <strong>{formatPrice(order.total_price)}</strong>
           </p>
           {order.payment_method === 'mercadopago' ? (
             <>
-              <p className="muted">
-                Pague com PIX ou cartão no Checkout Pro do Mercado Pago.
+              <p className="muted" style={{ marginBottom: 16 }}>
+                Pague com PIX ou cartão sem sair do site (Checkout Transparente).
               </p>
-              {order.mp_init_point ? (
-                <a href={order.mp_init_point} className="btn">
-                  Ir para o pagamento
-                </a>
-              ) : (
-                <p className="muted">Link de pagamento indisponível. Fale conosco.</p>
-              )}
+              <MpPaymentBrick
+                orderId={order.id}
+                amount={Number(order.total_price)}
+                onPaid={() => {
+                  loadOrder()
+                }}
+              />
             </>
           ) : order.payment_method === 'pix' ? (
             <>

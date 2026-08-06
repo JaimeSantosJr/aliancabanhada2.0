@@ -1,9 +1,13 @@
 import { MercadoPagoConfig, Payment, Preference } from 'mercadopago'
-import { createHmac, timingSafeEqual } from 'crypto'
+import { createHmac, timingSafeEqual, randomUUID } from 'crypto'
 import { STORE } from '@/lib/store-config'
 
 export function isMercadoPagoConfigured() {
   return Boolean(process.env.MERCADO_PAGO_ACCESS_TOKEN)
+}
+
+export function getMercadoPagoPublicKey() {
+  return process.env.NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY || ''
 }
 
 function client() {
@@ -93,6 +97,63 @@ export async function createCheckoutPreference(input: PreferenceInput) {
   return {
     preferenceId: result.id || '',
     initPoint: initPoint || '',
+  }
+}
+
+type BrickFormData = Record<string, unknown>
+
+/** Checkout Transparente: cria pagamento a partir do Payment Brick. */
+export async function createTransparentPayment(opts: {
+  orderId: string
+  orderNumber: string
+  amount: number
+  payerEmail: string
+  formData: BrickFormData
+}) {
+  const payment = new Payment(client())
+  const site = STORE.siteUrl.replace(/\/$/, '')
+  const payerFromBrick =
+    opts.formData.payer && typeof opts.formData.payer === 'object'
+      ? (opts.formData.payer as Record<string, unknown>)
+      : {}
+
+  const result = await payment.create({
+    body: {
+      ...opts.formData,
+      transaction_amount: Number(opts.amount.toFixed(2)),
+      external_reference: opts.orderId,
+      description: `Pedido ${opts.orderNumber} — ${STORE.name}`,
+      notification_url: `${site}/api/webhooks/mercado-pago`,
+      metadata: {
+        order_id: opts.orderId,
+        order_number: opts.orderNumber,
+      },
+      payer: {
+        ...payerFromBrick,
+        email: opts.payerEmail,
+      },
+    } as never,
+    requestOptions: {
+      idempotencyKey: randomUUID(),
+    },
+  })
+
+  const tx = result.point_of_interaction?.transaction_data as
+    | {
+        qr_code?: string
+        qr_code_base64?: string
+        ticket_url?: string
+      }
+    | undefined
+
+  return {
+    id: String(result.id || ''),
+    status: String(result.status || ''),
+    statusDetail: String(result.status_detail || ''),
+    paymentMethodId: String(result.payment_method_id || ''),
+    pixQrCode: tx?.qr_code || null,
+    pixQrBase64: tx?.qr_code_base64 || null,
+    ticketUrl: tx?.ticket_url || null,
   }
 }
 

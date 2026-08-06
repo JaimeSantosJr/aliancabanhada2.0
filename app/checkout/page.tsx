@@ -344,11 +344,11 @@ export default function CheckoutPage() {
     }
 
     clear()
-    toast.success('Pedido realizado!')
-    if (data.checkout_url) {
-      window.location.href = data.checkout_url
-      return
-    }
+    toast.success(
+      form.payment_method === 'mercadopago'
+        ? 'Pedido criado! Finalize o pagamento abaixo.'
+        : 'Pedido realizado!',
+    )
     router.push(`/pedido/${data.id}`)
   }
 
@@ -631,7 +631,7 @@ export default function CheckoutPage() {
             {loading
               ? 'Enviando...'
               : form.payment_method === 'mercadopago'
-                ? 'Pagar com Mercado Pago'
+                ? 'Criar pedido e pagar'
                 : 'Confirmar pedido'}
           </button>
         </aside>

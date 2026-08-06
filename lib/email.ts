@@ -185,7 +185,7 @@ export async function sendOrderEmails(data: OrderMail) {
     data.paymentMethod === 'mercadopago'
       ? `<div style="margin:22px 0 0;padding:20px;background:#f4ecdd;border:1px solid #e4d9c4;">
           <div style="font-family:${SANS};font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};padding-bottom:10px;">Pagamento Mercado Pago</div>
-          <div style="font-family:${SANS};font-size:13px;color:${INK};line-height:1.7;">Finalize o pagamento na página segura do Mercado Pago (PIX ou cartão). O status será atualizado automaticamente.</div>
+          <div style="font-family:${SANS};font-size:13px;color:${INK};line-height:1.7;">Finalize o pagamento na página do pedido (PIX ou cartão, Checkout Transparente). O status será atualizado automaticamente.</div>
         </div>`
       : data.paymentMethod === 'pix'
         ? `<div style="margin:22px 0 0;padding:20px;background:#f4ecdd;border:1px solid #e4d9c4;">

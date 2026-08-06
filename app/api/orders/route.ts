@@ -1,6 +1,6 @@
 import { validateCoupon } from '@/lib/coupons'
 import { resolveSelectedShipping } from '@/lib/melhor-envio'
-import { createCheckoutPreference, isMercadoPagoConfigured } from '@/lib/mercado-pago'
+import { isMercadoPagoConfigured } from '@/lib/mercado-pago'
 import { STORE } from '@/lib/store-config'
 import { createRouteClient, createServiceClient } from '@/lib/supabase/route'
 import { NextResponse } from 'next/server'
@@ -237,37 +237,9 @@ export async function POST(request: Request) {
       /* opcional */
     }
 
-    let checkoutUrl: string | null = null
-    if (payment_method === 'mercadopago' && mpEnabled) {
-      try {
-        // Item único = total final (subtotal − cupom + frete), evita divergência
-        const pref = await createCheckoutPreference({
-          orderId: order.id,
-          orderNumber: order.order_number || order_number,
-          total: total_price,
-          shippingCost: 0,
-          items: [
-            {
-              title: `Pedido ${order.order_number || order_number} — ${STORE.name}`,
-              quantity: 1,
-              unit_price: total_price,
-            },
-          ],
-          payerEmail: orderPayload.customer_email,
-          payerName: orderPayload.customer_name,
-        })
-
-        checkoutUrl = pref.initPoint
-        await supabase
-          .from('orders')
-          .update({
-            mp_preference_id: pref.preferenceId,
-            mp_init_point: checkoutUrl,
-          })
-          .eq('id', order.id)
-      } catch (e) {
-        console.error('mp preference', e)
-      }
+    // Checkout Transparente: pagamento na página do pedido (Payment Brick), sem redirect Pro.
+    if (payment_method === 'mercadopago' && !mpEnabled) {
+      console.warn('Mercado Pago solicitado mas não configurado')
     }
 
     try {
@@ -314,7 +286,7 @@ export async function POST(request: Request) {
       discount_amount,
       coupon_code,
       payment_method,
-      checkout_url: checkoutUrl,
+      checkout_mode: payment_method === 'mercadopago' && mpEnabled ? 'transparent' : null,
       pixKey: STORE.pixKey,
       pixBeneficiary: STORE.pixBeneficiary,
     })
