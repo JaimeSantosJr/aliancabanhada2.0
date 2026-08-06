@@ -572,7 +572,7 @@ export default function CheckoutPage() {
             </label>
           </div>
           <p className="muted">
-            Com Mercado Pago você será redirecionado para a página segura de pagamento.
+            Com Mercado Pago você paga com PIX ou cartão nesta loja (Checkout Transparente).
             Prazo estimado após confirmação: {selectedShipping?.deliveryDays || STORE.shippingDaysMax} dias úteis.
           </p>
           <label>Observações<textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} /></label>
