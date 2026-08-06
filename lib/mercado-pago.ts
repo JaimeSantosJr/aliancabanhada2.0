@@ -83,10 +83,12 @@ export async function createCheckoutPreference(input: PreferenceInput) {
     },
   })
 
+  // Credenciais de teste atuais (APP_USR) funcionam melhor no domínio principal.
+  // sandbox_init_point fica como fallback.
   const initPoint =
-    process.env.MERCADO_PAGO_ENV === 'production'
-      ? result.init_point
-      : result.sandbox_init_point || result.init_point
+    process.env.MERCADO_PAGO_ENV === 'sandbox'
+      ? result.init_point || result.sandbox_init_point
+      : result.init_point || result.sandbox_init_point
 
   return {
     preferenceId: result.id || '',
