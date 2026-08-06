@@ -115,11 +115,29 @@ export const MATERIAL_LABELS: Record<string, string> = {
 
 export const ORDER_STATUS_LABELS: Record<string, string> = {
   pending: 'Aguardando pagamento',
-  paid: 'Pago',
-  preparing: 'Em preparo',
+  paid: 'Pagamento confirmado',
+  preparing: 'Em separação',
   shipped: 'Enviado',
   delivered: 'Entregue',
   cancelled: 'Cancelado',
+}
+
+/** Etapas visíveis ao cliente (estilo acompanhamento de compra). */
+export const ORDER_TRACK_STEPS = [
+  { key: 'pending', label: 'Pedido feito', hint: 'Registramos seu pedido' },
+  { key: 'paid', label: 'Pagamento', hint: 'Pagamento confirmado' },
+  { key: 'preparing', label: 'Em separação', hint: 'Sua peça está sendo preparada' },
+  { key: 'shipped', label: 'Enviado', hint: 'Saiu para entrega' },
+  { key: 'delivered', label: 'Entregue', hint: 'Chegou até você' },
+] as const
+
+export function orderTrackIndex(status: string): number {
+  if (status === 'cancelled') return -1
+  const idx = ORDER_TRACK_STEPS.findIndex((s) => s.key === status)
+  if (idx >= 0) return idx
+  // payment_status paid mas status ainda pending → trata como pago
+  if (status === 'paid') return 1
+  return 0
 }
 
 export function isAlianca(category: string) {

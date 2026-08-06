@@ -8,6 +8,8 @@ import { toast } from 'sonner'
 type Props = {
   orderId: string
   amount: number
+  payerEmail?: string | null
+  payerName?: string | null
   onPaid: () => void
 }
 
@@ -19,7 +21,13 @@ type PixData = {
 
 let mpInitializedKey: string | null = null
 
-export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
+export default function MpPaymentBrick({
+  orderId,
+  amount,
+  payerEmail,
+  payerName,
+  onPaid,
+}: Props) {
   const [ready, setReady] = useState(false)
   const [paymentId, setPaymentId] = useState<string | null>(null)
   const [pix, setPix] = useState<PixData | null>(null)
@@ -30,11 +38,21 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
   onPaidRef.current = onPaid
 
   const stableAmount = useMemo(() => Number(Number(amount).toFixed(2)), [amount])
+  const email = (payerEmail || '').trim()
 
-  const initialization = useMemo(
-    () => ({ amount: stableAmount }),
-    [stableAmount],
-  )
+  const initialization = useMemo(() => {
+    const base: {
+      amount: number
+      payer?: { email: string; firstName?: string }
+    } = { amount: stableAmount }
+    if (email) {
+      base.payer = {
+        email,
+        ...(payerName ? { firstName: payerName.split(' ')[0] } : {}),
+      }
+    }
+    return base
+  }, [stableAmount, email, payerName])
 
   const customization = useMemo(
     () => ({
@@ -43,13 +61,16 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
         debitCard: 'all' as const,
         maxInstallments: 12,
       },
+      visual: {
+        hidePaymentButton: false,
+      },
     }),
     [],
   )
 
   useEffect(() => {
     if (!publicKey) {
-      setError('Chave pública do Mercado Pago não configurada na Vercel (NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY).')
+      setError('Chave pública do Mercado Pago não configurada.')
       return
     }
     if (mpInitializedKey !== publicKey) {
@@ -65,13 +86,23 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
       await navigator.clipboard.writeText(pix.qrCode)
       toast.success('Código PIX copiado.')
     } catch {
-      toast.error('Não foi possível copiar. Copie manualmente.')
+      toast.error('Não foi possível copiar.')
     }
   }
 
   const onSubmit = useCallback(
     async (param: { formData: Record<string, unknown> }) => {
-      const formData = param.formData as Record<string, unknown>
+      const formData = { ...(param.formData as Record<string, unknown>) }
+      // Garante e-mail do pedido no payer (Brick às vezes deixa editar)
+      if (email) {
+        const payer =
+          formData.payer && typeof formData.payer === 'object'
+            ? { ...(formData.payer as Record<string, unknown>) }
+            : {}
+        if (!payer.email) payer.email = email
+        formData.payer = payer
+      }
+
       const res = await fetch('/api/payments/mercadopago', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,38 +135,30 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
         toast.message('Pagamento pendente. Aguarde a confirmação.')
       }
     },
-    [orderId],
+    [orderId, email],
   ) as never
 
   const onError = useCallback((err: unknown) => {
     console.error('mp brick error', err)
     const now = Date.now()
-    // evita spam de toast quando o Brick remonta
     if (now - errorToastAt.current < 8000) return
     errorToastAt.current = now
-    const msg =
+    toast.error(
       (err as { message?: string })?.message ||
-      'Não foi possível carregar o formulário. Recarregue a página.'
-    toast.error(msg)
+        'Não foi possível carregar o formulário. Recarregue a página.',
+    )
   }, [])
 
-  if (error) {
-    return <p className="muted">{error}</p>
-  }
-
-  if (!ready) {
-    return <p className="muted">Carregando pagamento seguro...</p>
-  }
+  if (error) return <p className="muted">{error}</p>
+  if (!ready) return <p className="muted">Carregando formulário seguro...</p>
 
   if (paymentId) {
     return (
-      <div>
+      <div className="pay-card-panel">
         {pix?.qrBase64 || pix?.qrCode ? (
-          <div style={{ marginBottom: 20 }}>
-            <h3 style={{ marginBottom: 8 }}>PIX gerado</h3>
-            <p className="muted" style={{ marginBottom: 12 }}>
-              Escaneie o QR Code ou copie o código. O status atualiza automaticamente após o pagamento.
-            </p>
+          <div>
+            <h3>PIX gerado</h3>
+            <p className="muted">Escaneie ou copie o código abaixo.</p>
             {pix.qrBase64 ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -143,34 +166,19 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
                 alt="QR Code PIX"
                 width={220}
                 height={220}
-                style={{ display: 'block', marginBottom: 12 }}
               />
             ) : null}
             {pix.qrCode ? (
               <>
-                <textarea
-                  readOnly
-                  value={pix.qrCode}
-                  rows={3}
-                  style={{ width: '100%', fontSize: 12, marginBottom: 8 }}
-                />
+                <textarea readOnly value={pix.qrCode} rows={3} />
                 <button type="button" className="btn" onClick={copyPix}>
                   Copiar código PIX
                 </button>
               </>
             ) : null}
-            {pix.ticketUrl ? (
-              <p style={{ marginTop: 12 }}>
-                <a href={pix.ticketUrl} target="_blank" rel="noreferrer" className="btn btn-outline">
-                  Abrir comprovante / boleto
-                </a>
-              </p>
-            ) : null}
           </div>
         ) : (
-          <p className="muted" style={{ marginBottom: 12 }}>
-            Pagamento em processamento. Esta página atualiza sozinha.
-          </p>
+          <p className="muted">Pagamento em processamento...</p>
         )}
         {/^\d+$/.test(paymentId) ? (
           <StatusScreen
@@ -184,9 +192,15 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
   }
 
   return (
-    <div id="mp-payment-brick-root">
+    <div className="pay-card-panel" id="mp-payment-brick-root">
+      {email ? (
+        <p className="pay-payer-hint">
+          Pagamento vinculado a <strong>{email}</strong>
+          <span className="muted"> · CPF/CNPJ continua sendo pedido por segurança do cartão</span>
+        </p>
+      ) : null}
       <Payment
-        key={`pay-${orderId}-${stableAmount}`}
+        key={`pay-${orderId}-${stableAmount}-${email}`}
         initialization={initialization}
         customization={customization}
         onSubmit={onSubmit}

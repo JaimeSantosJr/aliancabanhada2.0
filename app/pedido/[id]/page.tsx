@@ -2,7 +2,11 @@
 
 import { formatPrice } from '@/lib/format'
 import { STORE } from '@/lib/store-config'
-import { ORDER_STATUS_LABELS } from '@/lib/types'
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_TRACK_STEPS,
+  orderTrackIndex,
+} from '@/lib/types'
 import type { Order, OrderItem } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
 import dynamic from 'next/dynamic'
@@ -13,7 +17,7 @@ import { toast } from 'sonner'
 
 const MpPaymentBrick = dynamic(() => import('@/components/mp-payment-brick'), {
   ssr: false,
-  loading: () => <p className="muted">Carregando pagamento seguro...</p>,
+  loading: () => <p className="muted">Carregando formulário seguro...</p>,
 })
 
 const MpPixQr = dynamic(() => import('@/components/mp-pix-qr'), {
@@ -21,12 +25,47 @@ const MpPixQr = dynamic(() => import('@/components/mp-pix-qr'), {
   loading: () => <p className="muted">Gerando QR Code PIX...</p>,
 })
 
+function OrderTimeline({ status, paymentStatus }: { status: string; paymentStatus?: string | null }) {
+  const effective =
+    status === 'pending' && paymentStatus === 'paid' ? 'paid' : status
+  if (effective === 'cancelled') {
+    return (
+      <div className="order-timeline order-timeline--cancelled">
+        <p>Pedido cancelado</p>
+      </div>
+    )
+  }
+  const current = orderTrackIndex(effective)
+
+  return (
+    <ol className="order-timeline">
+      {ORDER_TRACK_STEPS.map((step, i) => {
+        const done = i < current
+        const active = i === current
+        return (
+          <li
+            key={step.key}
+            className={`order-timeline__step${done ? ' is-done' : ''}${active ? ' is-active' : ''}`}
+          >
+            <span className="order-timeline__dot" aria-hidden />
+            <div>
+              <strong>{step.label}</strong>
+              <small>{step.hint}</small>
+            </div>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 export default function PedidoPage() {
   const { id } = useParams<{ id: string }>()
   const search = useSearchParams()
   const [order, setOrder] = useState<Order | null>(null)
   const [items, setItems] = useState<OrderItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [payTab, setPayTab] = useState<'pix' | 'card'>('pix')
   const router = useRouter()
   const orderRef = useRef<Order | null>(null)
   orderRef.current = order
@@ -49,7 +88,8 @@ export default function PedidoPage() {
         const same =
           prev.payment_status === next.payment_status &&
           prev.status === next.status &&
-          prev.mp_status === next.mp_status
+          prev.mp_status === next.mp_status &&
+          prev.tracking_code === next.tracking_code
         if (same) {
           setLoading(false)
           return next
@@ -73,24 +113,24 @@ export default function PedidoPage() {
 
   useEffect(() => {
     const mp = search.get('mp')
-    if (mp === 'success') toast.success('Pagamento em processamento/aprovado. Atualizando status...')
-    if (mp === 'pending') toast.message('Pagamento pendente. Assim que confirmar, atualizamos o pedido.')
-    if (mp === 'failure') toast.error('Pagamento não concluído. Você pode tentar novamente.')
+    if (mp === 'success') toast.success('Pagamento em processamento. Atualizando...')
+    if (mp === 'pending') toast.message('Pagamento pendente.')
+    if (mp === 'failure') toast.error('Pagamento não concluído.')
   }, [search])
 
   useEffect(() => {
     loadOrder()
   }, [loadOrder])
 
-  // Poll silencioso: só atualiza estado se o status mudou (não remonta o Brick)
   useEffect(() => {
     if (!order) return
-    const pending = order.payment_status === 'pending' || order.status === 'pending'
-    if (!pending || order.payment_method !== 'mercadopago') return
+    const waitingPay =
+      (order.payment_status === 'pending' || order.status === 'pending') &&
+      order.payment_method === 'mercadopago'
+    const waitingShip = ['paid', 'preparing', 'shipped'].includes(order.status)
+    if (!waitingPay && !waitingShip) return
 
-    const t = setInterval(() => {
-      loadOrder({ silent: true })
-    }, 10000)
+    const t = setInterval(() => loadOrder({ silent: true }), 12000)
     return () => clearInterval(t)
   }, [order?.id, order?.payment_status, order?.status, order?.payment_method, loadOrder])
 
@@ -99,7 +139,17 @@ export default function PedidoPage() {
       await navigator.clipboard.writeText(STORE.pixKey)
       toast.success('Chave PIX copiada.')
     } catch {
-      toast.error('Não foi possível copiar. Copie manualmente.')
+      toast.error('Não foi possível copiar.')
+    }
+  }
+
+  const copyTracking = async () => {
+    if (!order?.tracking_code) return
+    try {
+      await navigator.clipboard.writeText(order.tracking_code)
+      toast.success('Código de rastreio copiado.')
+    } catch {
+      toast.error('Não foi possível copiar.')
     }
   }
 
@@ -116,68 +166,143 @@ export default function PedidoPage() {
   const shipping = Number(order.shipping_cost || 0)
   const discount = Number(order.discount_amount || 0)
   const subtotal = Number(order.subtotal ?? order.total_price - shipping + discount)
-  const pending = order.payment_status === 'pending' || order.status === 'pending'
-  const paid = order.payment_status === 'paid' || order.status === 'paid'
+  const awaitingPayment =
+    (order.payment_status === 'pending' || order.status === 'pending') &&
+    order.payment_status !== 'paid'
   const failed = order.payment_status === 'failed'
+  const showPayment = awaitingPayment || failed
+  const afterPay =
+    order.payment_status === 'paid' ||
+    ['paid', 'preparing', 'shipped', 'delivered'].includes(order.status)
   const payAmount = Number(order.total_price)
+  const statusLabel = ORDER_STATUS_LABELS[order.status] || order.status
+  const etaDays = order.shipping_delivery_days || STORE.shippingDaysMax
 
   return (
-    <div className="container page-pad">
-      <h1 className="page-title">Pedido {order.order_number || order.id.slice(0, 8)}</h1>
-      <div className="order-status-banner">
-        Status: <strong>{ORDER_STATUS_LABELS[order.status] || order.status}</strong>
-        {order.payment_method && (
-          <> · Pagamento: {order.payment_method.toUpperCase()} ({order.payment_status || 'pending'})</>
-        )}
-        {order.mp_status ? <> · MP: {order.mp_status}</> : null}
-      </div>
+    <div className="container page-pad order-page">
+      <header className="order-hero">
+        <p className="order-hero__kicker">Acompanhe seu pedido</p>
+        <h1 className="page-title">Pedido {order.order_number || order.id.slice(0, 8)}</h1>
+        <p className="order-hero__status">
+          Situação atual: <strong>{statusLabel}</strong>
+        </p>
+      </header>
 
-      {order.tracking_code && (
-        <div className="pix-box" style={{ marginBottom: 24 }}>
-          <h2>Rastreio</h2>
-          <p>Código: <strong>{order.tracking_code}</strong></p>
-        </div>
-      )}
+      <OrderTimeline status={order.status} paymentStatus={order.payment_status} />
 
-      {paid && (
-        <div className="pix-box" style={{ marginBottom: 24 }}>
-          <h2>Pagamento confirmado</h2>
-          <p>Recebemos seu pagamento. Em breve sua peça entra em preparo.</p>
-        </div>
-      )}
-
-      {(pending || failed) && (
-        <div className="pix-box">
-          <h2>{failed ? 'Tentar pagar novamente' : 'Como pagar'}</h2>
+      {afterPay && (
+        <section className="order-panel order-panel--success">
+          <h2>
+            {order.status === 'delivered'
+              ? 'Pedido entregue'
+              : order.status === 'shipped'
+                ? 'Seu pedido foi enviado'
+                : order.status === 'preparing'
+                  ? 'Em separação'
+                  : 'Pagamento confirmado'}
+          </h2>
           <p>
-            Valor: <strong>{formatPrice(order.total_price)}</strong>
+            {order.status === 'paid' &&
+              'Recebemos seu pagamento. Em breve sua peça entra em separação na oficina.'}
+            {order.status === 'preparing' &&
+              'Estamos preparando sua peça com cuidado. Você verá o rastreio aqui quando enviarmos.'}
+            {order.status === 'shipped' &&
+              'O pedido saiu para entrega. Use o código de rastreio abaixo para acompanhar.'}
+            {order.status === 'delivered' &&
+              'Esperamos que você ame sua peça. Qualquer dúvida, fale conosco.'}
           </p>
-          {order.payment_method === 'mercadopago' ? (
-            <>
-              <MpPixQr orderId={order.id} onPaid={onPaid} />
-              <hr style={{ margin: '24px 0', border: 0, borderTop: '1px solid #e4d9c4' }} />
-              <h3 style={{ marginBottom: 8 }}>Ou pague com cartão</h3>
-              <p className="muted" style={{ marginBottom: 16 }}>
-                Cartão de crédito ou débito no Checkout Transparente.
+
+          <div className="order-ship-grid">
+            <div>
+              <h3>Entrega</h3>
+              <p>
+                {order.shipping_company || 'Transportadora'}
+                {order.shipping_service_name ? ` · ${order.shipping_service_name}` : ''}
               </p>
-              <MpPaymentBrick
-                orderId={order.id}
-                amount={payAmount}
-                onPaid={onPaid}
-              />
-            </>
-          ) : order.payment_method === 'pix' ? (
+              <p className="muted">
+                Prazo estimado: até <strong>{etaDays} dias úteis</strong> após a confirmação do pagamento
+              </p>
+            </div>
+            <div>
+              <h3>Rastreio</h3>
+              {order.tracking_code ? (
+                <>
+                  <p className="order-tracking-code">{order.tracking_code}</p>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={copyTracking}>
+                    Copiar código
+                  </button>
+                </>
+              ) : (
+                <p className="muted">
+                  Ainda sem código. Assim que enviarmos, aparece aqui automaticamente.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {showPayment && (
+        <section className="order-panel order-panel--pay">
+          <div className="order-pay-head">
+            <div>
+              <h2>{failed ? 'Tentar pagar novamente' : 'Finalize o pagamento'}</h2>
+              <p className="muted">
+                Total a pagar: <strong>{formatPrice(order.total_price)}</strong>
+              </p>
+            </div>
+          </div>
+
+          {(order.payment_method === 'mercadopago' || order.payment_method === 'pix') && (
             <>
-              <MpPixQr orderId={order.id} onPaid={onPaid} />
-              <p className="muted" style={{ marginTop: 20, fontSize: 13 }}>
-                Alternativa — chave da loja: <strong>{STORE.pixKey}</strong>
-                {' '}
-                <button type="button" className="btn btn-outline" onClick={copyPix} style={{ marginLeft: 8 }}>
-                  Copiar chave
+              <div className="order-pay-tabs" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  className={payTab === 'pix' ? 'is-active' : ''}
+                  onClick={() => setPayTab('pix')}
+                >
+                  PIX (QR Code)
                 </button>
-              </p>
+                {order.payment_method === 'mercadopago' && (
+                  <button
+                    type="button"
+                    role="tab"
+                    className={payTab === 'card' ? 'is-active' : ''}
+                    onClick={() => setPayTab('card')}
+                  >
+                    Cartão
+                  </button>
+                )}
+              </div>
+
+              {payTab === 'pix' || order.payment_method === 'pix' ? (
+                <div className="order-pay-body">
+                  <MpPixQr orderId={order.id} onPaid={onPaid} />
+                  {order.payment_method === 'pix' && (
+                    <p className="muted order-pay-alt">
+                      Alternativa — chave da loja: <strong>{STORE.pixKey}</strong>{' '}
+                      <button type="button" className="btn btn-outline btn-sm" onClick={copyPix}>
+                        Copiar
+                      </button>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="order-pay-body">
+                  <MpPaymentBrick
+                    orderId={order.id}
+                    amount={payAmount}
+                    payerEmail={order.customer_email}
+                    payerName={order.customer_name}
+                    onPaid={onPaid}
+                  />
+                </div>
+              )}
             </>
-          ) : (
+          )}
+
+          {order.payment_method === 'transferencia' && (
             <p>
               Transferência bancária.
               {STORE.bankName ? (
@@ -187,53 +312,73 @@ export default function PedidoPage() {
               )}
             </p>
           )}
-          <Link href="/contato" className="btn btn-outline" style={{ marginTop: 12, display: 'inline-block' }}>
+
+          <Link href="/contato" className="btn btn-outline" style={{ marginTop: 16, display: 'inline-block' }}>
             Falar com a loja
           </Link>
-        </div>
+        </section>
       )}
 
-      <h2>Itens</h2>
-      <ul className="order-items-list">
-        {items.map((item) => (
-          <li key={item.id}>
-            <span>
-              {item.product_name || 'Peça'}
-              {item.size ? ` · ${item.size}` : ''} × {item.quantity}
-            </span>
-            <strong>
-              {item.unit_price != null ? formatPrice(Number(item.unit_price) * item.quantity) : '—'}
-            </strong>
-          </li>
-        ))}
-      </ul>
-      <div className="summary-rows" style={{ maxWidth: 420, marginBottom: 8 }}>
-        <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
-        {discount > 0 && (
-          <p><span>Cupom {order.coupon_code}</span><strong>− {formatPrice(discount)}</strong></p>
-        )}
-        <p><span>Frete</span><strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong></p>
-        {(order.shipping_company || order.shipping_service_name) && (
-          <p className="muted" style={{ fontSize: 13 }}>
-            {order.shipping_company}
-            {order.shipping_service_name ? ` · ${order.shipping_service_name}` : ''}
-            {order.shipping_delivery_days ? ` · ${order.shipping_delivery_days} dias úteis` : ''}
+      <div className="order-layout">
+        <section className="order-panel">
+          <h2>Itens</h2>
+          <ul className="order-items-list">
+            {items.map((item) => (
+              <li key={item.id}>
+                <span>
+                  {item.product_name || 'Peça'}
+                  {item.size ? ` · ${item.size}` : ''} × {item.quantity}
+                </span>
+                <strong>
+                  {item.unit_price != null
+                    ? formatPrice(Number(item.unit_price) * item.quantity)
+                    : '—'}
+                </strong>
+              </li>
+            ))}
+          </ul>
+          <div className="summary-rows">
+            <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
+            {discount > 0 && (
+              <p><span>Cupom {order.coupon_code}</span><strong>− {formatPrice(discount)}</strong></p>
+            )}
+            <p>
+              <span>Frete</span>
+              <strong>{shipping === 0 ? 'Grátis' : formatPrice(shipping)}</strong>
+            </p>
+          </div>
+          <p className="summary-total">
+            <span>Total</span>
+            <strong>{formatPrice(order.total_price)}</strong>
           </p>
-        )}
+        </section>
+
+        <section className="order-panel">
+          <h2>Endereço de entrega</h2>
+          <p className="order-address">
+            <strong>{order.customer_name}</strong><br />
+            {order.shipping_street}, {order.shipping_number}
+            {order.shipping_complement ? ` — ${order.shipping_complement}` : ''}<br />
+            {order.shipping_neighborhood}<br />
+            {order.shipping_city}/{order.shipping_state} · CEP {order.shipping_zip}<br />
+            <span className="muted">
+              {order.customer_phone}<br />
+              {order.customer_email}
+            </span>
+          </p>
+          {(order.shipping_company || order.shipping_service_name) && (
+            <p className="muted" style={{ marginTop: 12, fontSize: 13 }}>
+              Modalidade: {order.shipping_company}
+              {order.shipping_service_name ? ` · ${order.shipping_service_name}` : ''}
+            </p>
+          )}
+        </section>
       </div>
-      <p className="summary-total"><span>Total</span><strong>{formatPrice(order.total_price)}</strong></p>
 
-      <h2>Entrega</h2>
-      <p>
-        {order.customer_name}<br />
-        {order.shipping_street}, {order.shipping_number}
-        {order.shipping_complement ? ` — ${order.shipping_complement}` : ''}<br />
-        {order.shipping_neighborhood} · {order.shipping_city}/{order.shipping_state}<br />
-        CEP {order.shipping_zip}<br />
-        {order.customer_phone} · {order.customer_email}
-      </p>
-
-      <Link href="/conta" className="btn btn-outline">Voltar à conta</Link>
+      <div className="order-footer-actions">
+        <Link href="/conta" className="btn btn-outline">Minha conta</Link>
+        <Link href="/loja" className="btn">Continuar comprando</Link>
+      </div>
     </div>
   )
 }
