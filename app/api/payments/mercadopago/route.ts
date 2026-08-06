@@ -60,6 +60,9 @@ export async function POST(request: Request) {
       mp_payment_id: payment.id,
       mp_status: payment.status,
     }
+    if (payment.orderId) {
+      patch.mp_preference_id = payment.orderId
+    }
 
     if (payment.status === 'approved') {
       patch.payment_status = 'paid'
@@ -88,11 +91,16 @@ export async function POST(request: Request) {
     return NextResponse.json(payment)
   } catch (e) {
     console.error('mp transparent payment', e)
-    const err = e as { message?: string; cause?: { message?: string } }
-    const message =
+    const err = e as {
+      message?: string
+      causes?: Array<{ message?: string; code?: string; description?: string }>
+      cause?: { message?: string }
+    }
+    const causeMsg =
+      err?.causes?.map((c) => c.message || c.description || c.code).filter(Boolean).join('; ') ||
       err?.cause?.message ||
       err?.message ||
       'Não foi possível processar o pagamento.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: causeMsg }, { status: 500 })
   }
 }

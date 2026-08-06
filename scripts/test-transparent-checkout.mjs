@@ -29,7 +29,7 @@ const CHROME =
   process.env.CHROME_PATH ||
   'C:/Program Files/Google/Chrome/Application/chrome.exe'
 
-const PRODUCT_PATH = '/produto/b76ec217-f426-4ec9-8938-88d23991c556'
+const PRODUCT_PATH = '/produto/0ee99298-6e36-4d3e-aa82-c7b596604eb1'
 
 async function createCardToken() {
   const res = await fetch(
@@ -83,8 +83,17 @@ async function main() {
   try {
     // 1) Produto → carrinho → checkout
     await page.goto(`${BASE}${PRODUCT_PATH}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await page.getByRole('button', { name: '18', exact: true }).click()
-    await page.getByRole('button', { name: 'Comprar agora', exact: true }).click()
+    await page.waitForTimeout(2000)
+    const sizeBtn = page.getByRole('button', { name: '18', exact: true }).first()
+    await sizeBtn.click()
+    const buy = page.getByRole('button', { name: 'Comprar agora', exact: true })
+    await buy.waitFor({ state: 'visible', timeout: 15000 })
+    // se ainda disabled, tenta tamanho default
+    if (await buy.isDisabled()) {
+      await page.getByRole('button', { name: '16', exact: true }).first().click()
+      await page.waitForTimeout(500)
+    }
+    await buy.click({ timeout: 15000 })
     await page.waitForTimeout(1500)
 
     const finalizar = page.getByRole('link', { name: 'Finalizar compra' })
@@ -192,6 +201,7 @@ async function main() {
             orderId,
             token: tokenId,
             payment_method_id: paymentMethodId || 'master',
+            payment_type_id: 'credit_card',
             installments: 1,
             payer: {
               email: 'test_user_buyer@testuser.com',
@@ -229,6 +239,9 @@ async function main() {
         return { status: res.status, data: await res.json() }
       }, orderId)
       console.log('PIX_RESULT', JSON.stringify(pixResult, null, 2))
+      if (pixResult.status < 400 && pixResult.data?.status) {
+        Object.assign(paymentResult, pixResult)
+      }
     }
 
     await page.reload({ waitUntil: 'domcontentloaded' })

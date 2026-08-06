@@ -96,12 +96,18 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
               </p>
             ) : null}
           </div>
+        ) : (
+          <p className="muted" style={{ marginBottom: 12 }}>
+            Pagamento em processamento. Esta página atualiza sozinha.
+          </p>
+        )}
+        {/^\d+$/.test(paymentId) ? (
+          <StatusScreen
+            initialization={{ paymentId }}
+            onReady={() => undefined}
+            onError={() => toast.error('Erro ao carregar status do pagamento.')}
+          />
         ) : null}
-        <StatusScreen
-          initialization={{ paymentId }}
-          onReady={() => undefined}
-          onError={() => toast.error('Erro ao carregar status do pagamento.')}
-        />
       </div>
     )
   }

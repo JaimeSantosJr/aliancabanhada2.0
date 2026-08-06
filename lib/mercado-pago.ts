@@ -1,4 +1,4 @@
-import { MercadoPagoConfig, Payment, Preference } from 'mercadopago'
+import { MercadoPagoConfig, Order, Payment, Preference } from 'mercadopago'
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto'
 import { STORE } from '@/lib/store-config'
 
@@ -48,8 +48,6 @@ export async function createCheckoutPreference(input: PreferenceInput) {
     })
   }
 
-  // Ajuste fino: se o total do pedido for menor que a soma (por desconto),
-  // usa um único item consolidado para bater o valor cobrado.
   const itemsSum = items.reduce((s, i) => s + i.unit_price * i.quantity, 0)
   const finalItems =
     Math.abs(itemsSum - input.total) > 0.02
@@ -87,8 +85,6 @@ export async function createCheckoutPreference(input: PreferenceInput) {
     },
   })
 
-  // Credenciais de teste atuais (APP_USR) funcionam melhor no domínio principal.
-  // sandbox_init_point fica como fallback.
   const initPoint =
     process.env.MERCADO_PAGO_ENV === 'sandbox'
       ? result.init_point || result.sandbox_init_point
@@ -102,7 +98,32 @@ export async function createCheckoutPreference(input: PreferenceInput) {
 
 type BrickFormData = Record<string, unknown>
 
-/** Checkout Transparente: cria pagamento a partir do Payment Brick. */
+function mapPaymentMethodType(formData: BrickFormData): string {
+  const explicit = String(
+    formData.payment_type_id || formData.paymentTypeId || '',
+  ).toLowerCase()
+  if (explicit) return explicit
+
+  const method = String(formData.payment_method_id || '').toLowerCase()
+  if (method === 'pix') return 'bank_transfer'
+  if (method.startsWith('bol') || method === 'pec' || method === 'paycash') return 'ticket'
+  if (method.includes('deb')) return 'debit_card'
+  if (formData.token) return 'credit_card'
+  return 'credit_card'
+}
+
+function mapOrderStatus(orderStatus: string, statusDetail: string): string {
+  const s = orderStatus.toLowerCase()
+  const d = statusDetail.toLowerCase()
+  if (s === 'processed' && (d === 'accredited' || d === 'partially_refunded')) return 'approved'
+  if (s === 'processed') return 'approved'
+  if (s === 'action_required' || s === 'created' || s === 'processing') return 'pending'
+  if (s === 'cancelled' || s === 'expired') return 'cancelled'
+  if (s === 'failed' || d.includes('rejected') || d.includes('cc_rejected')) return 'rejected'
+  return s || 'pending'
+}
+
+/** Checkout Transparente via Orders API (compatível com credenciais de teste). */
 export async function createTransparentPayment(opts: {
   orderId: string
   orderNumber: string
@@ -110,27 +131,49 @@ export async function createTransparentPayment(opts: {
   payerEmail: string
   formData: BrickFormData
 }) {
-  const payment = new Payment(client())
-  const site = STORE.siteUrl.replace(/\/$/, '')
+  const orderClient = new Order(client())
+  const amount = Number(opts.amount.toFixed(2)).toFixed(2)
+  const methodId = String(opts.formData.payment_method_id || '')
+  const methodType = mapPaymentMethodType(opts.formData)
   const payerFromBrick =
     opts.formData.payer && typeof opts.formData.payer === 'object'
       ? (opts.formData.payer as Record<string, unknown>)
       : {}
 
-  const result = await payment.create({
+  const paymentMethod: Record<string, unknown> = {
+    id: methodId,
+    type: methodType,
+  }
+  if (opts.formData.token) {
+    paymentMethod.token = opts.formData.token
+    paymentMethod.installments = Number(opts.formData.installments || 1)
+  }
+
+  const payerEmail =
+    process.env.MERCADO_PAGO_ENV === 'sandbox'
+      ? 'test_user_buyer@testuser.com'
+      : opts.payerEmail
+
+  const result = await orderClient.create({
     body: {
-      ...opts.formData,
-      transaction_amount: Number(opts.amount.toFixed(2)),
+      type: 'online',
+      processing_mode: 'automatic',
+      total_amount: amount,
       external_reference: opts.orderId,
       description: `Pedido ${opts.orderNumber} — ${STORE.name}`,
-      notification_url: `${site}/api/webhooks/mercado-pago`,
-      metadata: {
-        order_id: opts.orderId,
-        order_number: opts.orderNumber,
-      },
       payer: {
-        ...payerFromBrick,
-        email: opts.payerEmail,
+        email: payerEmail,
+        ...(payerFromBrick.identification
+          ? { identification: payerFromBrick.identification as never }
+          : {}),
+      },
+      transactions: {
+        payments: [
+          {
+            amount,
+            payment_method: paymentMethod as never,
+          },
+        ],
       },
     } as never,
     requestOptions: {
@@ -138,28 +181,73 @@ export async function createTransparentPayment(opts: {
     },
   })
 
-  const tx = result.point_of_interaction?.transaction_data as
+  const pay = result.transactions?.payments?.[0] as
     | {
-        qr_code?: string
-        qr_code_base64?: string
-        ticket_url?: string
+        id?: string
+        status?: string
+        status_detail?: string
+        payment_method?: {
+          id?: string
+          qr_code?: string
+          qr_code_base64?: string
+          ticket_url?: string
+        }
       }
     | undefined
 
+  const status = mapOrderStatus(
+    String(result.status || ''),
+    String(result.status_detail || pay?.status_detail || ''),
+  )
+
   return {
-    id: String(result.id || ''),
-    status: String(result.status || ''),
-    statusDetail: String(result.status_detail || ''),
-    paymentMethodId: String(result.payment_method_id || ''),
-    pixQrCode: tx?.qr_code || null,
-    pixQrBase64: tx?.qr_code_base64 || null,
-    ticketUrl: tx?.ticket_url || null,
+    id: String(pay?.id || result.id || ''),
+    orderId: String(result.id || ''),
+    status,
+    statusDetail: String(result.status_detail || pay?.status_detail || ''),
+    paymentMethodId: String(pay?.payment_method?.id || methodId),
+    pixQrCode: pay?.payment_method?.qr_code || null,
+    pixQrBase64: pay?.payment_method?.qr_code_base64 || null,
+    ticketUrl: pay?.payment_method?.ticket_url || null,
   }
 }
 
 export async function getPayment(paymentId: string) {
   const payment = new Payment(client())
   return payment.get({ id: paymentId })
+}
+
+export async function getOrder(orderId: string) {
+  const order = new Order(client())
+  return order.get({ id: orderId })
+}
+
+/** Normaliza status de Order MP para o fluxo da loja. */
+export function normalizeOrderPayment(order: Awaited<ReturnType<typeof getOrder>>) {
+  const pay = order.transactions?.payments?.[0] as
+    | {
+        id?: string
+        status?: string
+        status_detail?: string
+        amount?: string
+        paid_amount?: string
+        payment_method?: { id?: string }
+      }
+    | undefined
+
+  const status = mapOrderStatus(
+    String(order.status || ''),
+    String(order.status_detail || pay?.status_detail || ''),
+  )
+
+  return {
+    id: String(pay?.id || order.id || ''),
+    orderId: String(order.id || ''),
+    externalReference: String(order.external_reference || ''),
+    status,
+    amount: Number(pay?.paid_amount || pay?.amount || order.total_paid_amount || order.total_amount || 0),
+    paymentMethodId: String(pay?.payment_method?.id || ''),
+  }
 }
 
 /** Valida assinatura x-signature do webhook Mercado Pago */
@@ -170,7 +258,6 @@ export function verifyMercadoPagoSignature(opts: {
 }): boolean {
   const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET
   if (!secret) {
-    // Em desenvolvimento sem secret, aceita com aviso (produção deve ter secret)
     return process.env.NODE_ENV !== 'production'
   }
   if (!opts.xSignature || !opts.dataId) return false
