@@ -130,6 +130,7 @@ export async function createTransparentPayment(opts: {
   amount: number
   payerEmail: string
   formData: BrickFormData
+  idempotencyKey?: string
 }) {
   const orderClient = new Order(client())
   const amount = Number(opts.amount.toFixed(2)).toFixed(2)
@@ -141,8 +142,8 @@ export async function createTransparentPayment(opts: {
       : {}
 
   const paymentMethod: Record<string, unknown> = {
-    id: methodId,
-    type: methodType,
+    id: methodId || 'pix',
+    type: methodType || (methodId === 'pix' || opts.formData.mode === 'pix' ? 'bank_transfer' : 'credit_card'),
   }
   if (opts.formData.token) {
     paymentMethod.token = opts.formData.token
@@ -177,7 +178,7 @@ export async function createTransparentPayment(opts: {
       },
     } as never,
     requestOptions: {
-      idempotencyKey: randomUUID(),
+      idempotencyKey: opts.idempotencyKey || randomUUID(),
     },
   })
 
@@ -200,15 +201,16 @@ export async function createTransparentPayment(opts: {
     String(result.status_detail || pay?.status_detail || ''),
   )
 
+  const pm = pay?.payment_method
   return {
     id: String(pay?.id || result.id || ''),
     orderId: String(result.id || ''),
     status,
     statusDetail: String(result.status_detail || pay?.status_detail || ''),
-    paymentMethodId: String(pay?.payment_method?.id || methodId),
-    pixQrCode: pay?.payment_method?.qr_code || null,
-    pixQrBase64: pay?.payment_method?.qr_code_base64 || null,
-    ticketUrl: pay?.payment_method?.ticket_url || null,
+    paymentMethodId: String(pm?.id || methodId),
+    pixQrCode: pm?.qr_code || null,
+    pixQrBase64: pm?.qr_code_base64 || null,
+    ticketUrl: pm?.ticket_url || null,
   }
 }
 

@@ -16,6 +16,11 @@ const MpPaymentBrick = dynamic(() => import('@/components/mp-payment-brick'), {
   loading: () => <p className="muted">Carregando pagamento seguro...</p>,
 })
 
+const MpPixQr = dynamic(() => import('@/components/mp-pix-qr'), {
+  ssr: false,
+  loading: () => <p className="muted">Gerando QR Code PIX...</p>,
+})
+
 export default function PedidoPage() {
   const { id } = useParams<{ id: string }>()
   const search = useSearchParams()
@@ -149,8 +154,11 @@ export default function PedidoPage() {
           </p>
           {order.payment_method === 'mercadopago' ? (
             <>
+              <MpPixQr orderId={order.id} onPaid={onPaid} />
+              <hr style={{ margin: '24px 0', border: 0, borderTop: '1px solid #e4d9c4' }} />
+              <h3 style={{ marginBottom: 8 }}>Ou pague com cartão</h3>
               <p className="muted" style={{ marginBottom: 16 }}>
-                Pague com PIX ou cartão sem sair do site (Checkout Transparente).
+                Cartão de crédito ou débito no Checkout Transparente.
               </p>
               <MpPaymentBrick
                 orderId={order.id}
@@ -160,15 +168,13 @@ export default function PedidoPage() {
             </>
           ) : order.payment_method === 'pix' ? (
             <>
-              <p>Beneficiário: <strong>{STORE.pixBeneficiary}</strong></p>
-              <p>
-                Chave PIX ({STORE.pixKeyType}): <strong>{STORE.pixKey}</strong>
-              </p>
-              <button type="button" className="btn" onClick={copyPix}>
-                Copiar chave PIX
-              </button>
-              <p className="muted" style={{ marginTop: 12 }}>
-                Após pagar, envie o comprovante pelo contato da loja.
+              <MpPixQr orderId={order.id} onPaid={onPaid} />
+              <p className="muted" style={{ marginTop: 20, fontSize: 13 }}>
+                Alternativa — chave da loja: <strong>{STORE.pixKey}</strong>
+                {' '}
+                <button type="button" className="btn btn-outline" onClick={copyPix} style={{ marginLeft: 8 }}>
+                  Copiar chave
+                </button>
               </p>
             </>
           ) : (

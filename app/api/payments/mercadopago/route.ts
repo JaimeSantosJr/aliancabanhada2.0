@@ -47,12 +47,20 @@ export async function POST(request: Request) {
       })
     }
 
+    const isPix =
+      String(formData.payment_method_id || '') === 'pix' ||
+      formData.mode === 'pix' ||
+      String(formData.payment_type_id || '') === 'bank_transfer'
+
     const payment = await createTransparentPayment({
       orderId: order.id,
       orderNumber: order.order_number || order.id.slice(0, 8),
       amount: Number(order.total_price),
       payerEmail: order.customer_email || user.email || '',
-      formData,
+      formData: isPix
+        ? { ...formData, payment_method_id: 'pix', payment_type_id: 'bank_transfer' }
+        : formData,
+      idempotencyKey: isPix ? `pix-${order.id}` : undefined,
     })
 
     const db = createServiceClient() || supabase

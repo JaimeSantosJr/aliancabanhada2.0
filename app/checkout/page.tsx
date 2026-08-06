@@ -550,7 +550,7 @@ export default function CheckoutPage() {
                 checked={form.payment_method === 'mercadopago'}
                 onChange={() => set('payment_method', 'mercadopago')}
               />
-              Mercado Pago (PIX / cartão)
+              Mercado Pago (PIX QR / cartão)
             </label>
             <label className={form.payment_method === 'pix' ? 'is-active' : ''}>
               <input
@@ -559,7 +559,7 @@ export default function CheckoutPage() {
                 checked={form.payment_method === 'pix'}
                 onChange={() => set('payment_method', 'pix')}
               />
-              PIX manual
+              PIX (QR Code na hora)
             </label>
             <label className={form.payment_method === 'transferencia' ? 'is-active' : ''}>
               <input
@@ -572,7 +572,7 @@ export default function CheckoutPage() {
             </label>
           </div>
           <p className="muted">
-            Com Mercado Pago você paga com PIX ou cartão nesta loja (Checkout Transparente).
+            No PIX, o QR Code aparece na página do pedido assim que finalizar. No cartão, o formulário fica na mesma página.
             Prazo estimado após confirmação: {selectedShipping?.deliveryDays || STORE.shippingDaysMax} dias úteis.
           </p>
           <label>Observações<textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} /></label>

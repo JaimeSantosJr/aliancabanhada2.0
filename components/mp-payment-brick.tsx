@@ -41,11 +41,7 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
       paymentMethods: {
         creditCard: 'all' as const,
         debitCard: 'all' as const,
-        bankTransfer: 'all' as const,
         maxInstallments: 12,
-      },
-      visual: {
-        hideFormTitle: false,
       },
     }),
     [],

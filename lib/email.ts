@@ -190,9 +190,7 @@ export async function sendOrderEmails(data: OrderMail) {
       : data.paymentMethod === 'pix'
         ? `<div style="margin:22px 0 0;padding:20px;background:#f4ecdd;border:1px solid #e4d9c4;">
           <div style="font-family:${SANS};font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};padding-bottom:10px;">Pagamento via PIX</div>
-          <div style="font-family:${SERIF};font-size:17px;color:${INK};word-break:break-all;">${STORE.pixKey}</div>
-          <div style="font-family:${SANS};font-size:12px;color:${MUTED};padding-top:8px;">Favorecido: ${STORE.pixBeneficiary}</div>
-          <div style="font-family:${SANS};font-size:12px;color:${MUTED};padding-top:10px;line-height:1.6;">Após o pagamento, envie o comprovante respondendo este e-mail para agilizarmos a produção.</div>
+          <div style="font-family:${SANS};font-size:13px;color:${INK};line-height:1.7;">O QR Code PIX já está na página do pedido. Abra o link abaixo para pagar agora — não é preciso esperar este e-mail.</div>
         </div>`
         : `<div style="margin:22px 0 0;padding:20px;background:#f4ecdd;border:1px solid #e4d9c4;">
           <div style="font-family:${SANS};font-size:11px;letter-spacing:2px;text-transform:uppercase;color:${MUTED};padding-bottom:10px;">Transferência bancária</div>
