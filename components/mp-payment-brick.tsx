@@ -109,7 +109,7 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
       }
     },
     [orderId],
-  ) as (param: unknown) => Promise<unknown>
+  ) as never
 
   const onError = useCallback((err: unknown) => {
     console.error('mp brick error', err)
