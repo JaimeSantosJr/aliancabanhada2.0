@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 const MpPaymentBrick = dynamic(() => import('@/components/mp-payment-brick'), {
@@ -23,25 +23,48 @@ export default function PedidoPage() {
   const [items, setItems] = useState<OrderItem[]>([])
   const [loading, setLoading] = useState(true)
   const router = useRouter()
+  const orderRef = useRef<Order | null>(null)
+  orderRef.current = order
 
-  const loadOrder = useCallback(async () => {
-    const supabase = createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      router.replace(`/auth/login?next=/pedido/${id}`)
-      return null
-    }
-    const { data: o } = await supabase.from('orders').select('*').eq('id', id).maybeSingle()
-    setOrder(o as Order | null)
-    if (o) {
-      const { data: lines } = await supabase.from('order_items').select('*').eq('order_id', id)
-      setItems((lines as OrderItem[]) || [])
-    }
-    setLoading(false)
-    return o as Order | null
-  }, [id, router])
+  const loadOrder = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) {
+        router.replace(`/auth/login?next=/pedido/${id}`)
+        return null
+      }
+      const { data: o } = await supabase.from('orders').select('*').eq('id', id).maybeSingle()
+      const next = o as Order | null
+
+      if (opts?.silent && orderRef.current && next) {
+        const prev = orderRef.current
+        const same =
+          prev.payment_status === next.payment_status &&
+          prev.status === next.status &&
+          prev.mp_status === next.mp_status
+        if (same) {
+          setLoading(false)
+          return next
+        }
+      }
+
+      setOrder(next)
+      if (next) {
+        const { data: lines } = await supabase.from('order_items').select('*').eq('order_id', id)
+        setItems((lines as OrderItem[]) || [])
+      }
+      setLoading(false)
+      return next
+    },
+    [id, router],
+  )
+
+  const onPaid = useCallback(() => {
+    loadOrder()
+  }, [loadOrder])
 
   useEffect(() => {
     const mp = search.get('mp')
@@ -54,17 +77,17 @@ export default function PedidoPage() {
     loadOrder()
   }, [loadOrder])
 
-  // Poll enquanto pendente (webhook / PIX)
+  // Poll silencioso: só atualiza estado se o status mudou (não remonta o Brick)
   useEffect(() => {
     if (!order) return
     const pending = order.payment_status === 'pending' || order.status === 'pending'
     if (!pending || order.payment_method !== 'mercadopago') return
 
     const t = setInterval(() => {
-      loadOrder()
-    }, 8000)
+      loadOrder({ silent: true })
+    }, 10000)
     return () => clearInterval(t)
-  }, [order, loadOrder])
+  }, [order?.id, order?.payment_status, order?.status, order?.payment_method, loadOrder])
 
   const copyPix = async () => {
     try {
@@ -91,6 +114,7 @@ export default function PedidoPage() {
   const pending = order.payment_status === 'pending' || order.status === 'pending'
   const paid = order.payment_status === 'paid' || order.status === 'paid'
   const failed = order.payment_status === 'failed'
+  const payAmount = Number(order.total_price)
 
   return (
     <div className="container page-pad">
@@ -130,10 +154,8 @@ export default function PedidoPage() {
               </p>
               <MpPaymentBrick
                 orderId={order.id}
-                amount={Number(order.total_price)}
-                onPaid={() => {
-                  loadOrder()
-                }}
+                amount={payAmount}
+                onPaid={onPaid}
               />
             </>
           ) : order.payment_method === 'pix' ? (

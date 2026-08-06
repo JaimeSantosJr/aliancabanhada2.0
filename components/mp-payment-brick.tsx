@@ -2,7 +2,7 @@
 
 import { getMercadoPagoPublicKey } from '@/lib/mercado-pago-public'
 import { initMercadoPago, Payment, StatusScreen } from '@mercadopago/sdk-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 type Props = {
@@ -17,7 +17,7 @@ type PixData = {
   ticketUrl: string | null
 }
 
-let mpInitialized = false
+let mpInitializedKey: string | null = null
 
 export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
   const [ready, setReady] = useState(false)
@@ -25,15 +25,40 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
   const [pix, setPix] = useState<PixData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const publicKey = getMercadoPagoPublicKey()
+  const onPaidRef = useRef(onPaid)
+  const errorToastAt = useRef(0)
+  onPaidRef.current = onPaid
+
+  const stableAmount = useMemo(() => Number(Number(amount).toFixed(2)), [amount])
+
+  const initialization = useMemo(
+    () => ({ amount: stableAmount }),
+    [stableAmount],
+  )
+
+  const customization = useMemo(
+    () => ({
+      paymentMethods: {
+        creditCard: 'all' as const,
+        debitCard: 'all' as const,
+        bankTransfer: 'all' as const,
+        maxInstallments: 12,
+      },
+      visual: {
+        hideFormTitle: false,
+      },
+    }),
+    [],
+  )
 
   useEffect(() => {
     if (!publicKey) {
-      setError('Chave pública do Mercado Pago não configurada.')
+      setError('Chave pública do Mercado Pago não configurada na Vercel (NEXT_PUBLIC_MERCADO_PAGO_PUBLIC_KEY).')
       return
     }
-    if (!mpInitialized) {
+    if (mpInitializedKey !== publicKey) {
       initMercadoPago(publicKey, { locale: 'pt-BR' })
-      mpInitialized = true
+      mpInitializedKey = publicKey
     }
     setReady(true)
   }, [publicKey])
@@ -47,6 +72,56 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
       toast.error('Não foi possível copiar. Copie manualmente.')
     }
   }
+
+  const onSubmit = useCallback(
+    async (param: { formData: Record<string, unknown> }) => {
+      const formData = param.formData as Record<string, unknown>
+      const res = await fetch('/api/payments/mercadopago', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, ...formData }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Pagamento não processado.')
+        throw new Error(data.error || 'payment_failed')
+      }
+
+      if (data.status === 'approved' || data.alreadyPaid) {
+        toast.success('Pagamento aprovado!')
+        onPaidRef.current()
+        return
+      }
+
+      if (data.status === 'rejected') {
+        toast.error('Pagamento recusado. Tente outro cartão ou PIX.')
+        throw new Error('rejected')
+      }
+
+      setPix({
+        qrCode: data.pixQrCode || null,
+        qrBase64: data.pixQrBase64 || null,
+        ticketUrl: data.ticketUrl || null,
+      })
+      setPaymentId(data.id)
+      if (data.status === 'pending' || data.status === 'in_process') {
+        toast.message('Pagamento pendente. Aguarde a confirmação.')
+      }
+    },
+    [orderId],
+  ) as (param: unknown) => Promise<unknown>
+
+  const onError = useCallback((err: unknown) => {
+    console.error('mp brick error', err)
+    const now = Date.now()
+    // evita spam de toast quando o Brick remonta
+    if (now - errorToastAt.current < 8000) return
+    errorToastAt.current = now
+    const msg =
+      (err as { message?: string })?.message ||
+      'Não foi possível carregar o formulário. Recarregue a página.'
+    toast.error(msg)
+  }, [])
 
   if (error) {
     return <p className="muted">{error}</p>
@@ -105,7 +180,7 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
           <StatusScreen
             initialization={{ paymentId }}
             onReady={() => undefined}
-            onError={() => toast.error('Erro ao carregar status do pagamento.')}
+            onError={() => undefined}
           />
         ) : null}
       </div>
@@ -113,52 +188,15 @@ export default function MpPaymentBrick({ orderId, amount, onPaid }: Props) {
   }
 
   return (
-    <Payment
-      initialization={{ amount: Number(amount.toFixed(2)) }}
-      customization={{
-        paymentMethods: {
-          creditCard: 'all',
-          debitCard: 'all',
-          bankTransfer: 'all',
-          ticket: 'all',
-          maxInstallments: 12,
-        },
-      }}
-      onSubmit={async ({ formData }) => {
-        const res = await fetch('/api/payments/mercadopago', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, ...formData }),
-        })
-        const data = await res.json()
-        if (!res.ok) {
-          toast.error(data.error || 'Pagamento não processado.')
-          throw new Error(data.error || 'payment_failed')
-        }
-
-        if (data.status === 'approved' || data.alreadyPaid) {
-          toast.success('Pagamento aprovado!')
-          onPaid()
-          return
-        }
-
-        if (data.status === 'rejected') {
-          toast.error('Pagamento recusado. Tente outro cartão ou PIX.')
-          throw new Error('rejected')
-        }
-
-        setPix({
-          qrCode: data.pixQrCode || null,
-          qrBase64: data.pixQrBase64 || null,
-          ticketUrl: data.ticketUrl || null,
-        })
-        setPaymentId(data.id)
-        if (data.status === 'pending' || data.status === 'in_process') {
-          toast.message('Pagamento pendente. Aguarde a confirmação.')
-        }
-      }}
-      onError={() => toast.error('Erro no formulário de pagamento.')}
-      onReady={() => undefined}
-    />
+    <div id="mp-payment-brick-root">
+      <Payment
+        key={`pay-${orderId}-${stableAmount}`}
+        initialization={initialization}
+        customization={customization}
+        onSubmit={onSubmit}
+        onError={onError}
+        onReady={() => undefined}
+      />
+    </div>
   )
 }

@@ -35,7 +35,7 @@ function userAgent() {
 
 export function fallbackShippingOption(insuranceValue?: number): ShippingQuoteOption {
   const freeTest =
-    typeof insuranceValue === 'number' && insuranceValue > 0 && insuranceValue <= 1.5
+    typeof insuranceValue === 'number' && insuranceValue > 0 && insuranceValue <= 5.5
   return {
     id: 'flat',
     name: freeTest ? 'Frete grátis (pedido teste)' : 'Frete padrão',
@@ -56,8 +56,8 @@ export async function quoteMelhorEnvio(opts: {
     return { options: [], source: 'fallback', error: 'CEP inválido.' }
   }
 
-  // Pedido de teste (~R$ 1): frete grátis, sem chamar Melhor Envio
-  if (opts.insuranceValue > 0 && opts.insuranceValue <= 1.5) {
+  // Pedido de teste (produto R$1–R$5): frete grátis
+  if (opts.insuranceValue > 0 && opts.insuranceValue <= 5.5) {
     return {
       options: [fallbackShippingOption(opts.insuranceValue)],
       source: 'fallback',
