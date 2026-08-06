@@ -190,7 +190,11 @@ export async function POST(request: Request) {
     }
 
     const { error: itemsErr } = await supabase.from('order_items').insert(
-      lines.map((l) => ({ ...l, order_id: order.id })),
+      lines.map((l) => ({
+        ...l,
+        order_id: order.id,
+        price_at_purchase: l.unit_price,
+      })),
     )
 
     if (itemsErr) {

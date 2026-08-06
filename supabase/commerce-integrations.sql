@@ -26,6 +26,11 @@ alter table public.orders
   add constraint orders_payment_status_check
   check (payment_status in ('pending', 'paid', 'failed', 'refunded'));
 
+-- Compatibilidade com schema antigo que exige price_at_purchase
+alter table public.order_items
+  add column if not exists price_at_purchase numeric(12,2),
+  add column if not exists unit_price numeric(12,2);
+
 -- ========== COUPONS ==========
 create table if not exists public.coupons (
   id uuid primary key default gen_random_uuid(),
