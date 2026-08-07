@@ -320,9 +320,17 @@ nav ul li a:hover {
   letter-spacing: 3px;
   text-transform: uppercase;
   transition: 0.4s;
+  border: 0;
+  cursor: pointer;
 }
 .btn:hover {
   background: rgb(68, 68, 68);
+}
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 section {
   padding: 100px 0px;
@@ -1795,7 +1803,7 @@ footer {
   align-items: end;
   gap: 20px;
   margin-bottom: 28px;
-  padding: 24px 28px;
+  padding: 24px 28px !important;
   border: 1px solid #ebe7de;
   background: rgba(255, 255, 255, 0.92);
   position: relative;
@@ -1877,6 +1885,11 @@ footer {
 }
 .cart-summary-v2 .btn { background: #f3e3a5; color: #1a1a1a; }
 .cart-summary-v2 .btn:hover { background: #ffe9a8; }
+.cart-summary-v2 .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f3e3a5;
+}
 .cart-summary-v2 .btn-outline {
   background: transparent !important;
   color: #fff !important;

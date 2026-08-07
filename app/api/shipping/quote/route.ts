@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       : []
 
     if (cep.length !== 8) {
-      return NextResponse.json({ error: 'CEP inválido.' }, { status: 400 })
+      return NextResponse.json({ error: 'CEP inválido.', options: [] }, { status: 400 })
     }
 
     const freeShipping = await productsAllFreeShipping(productIds)
@@ -28,6 +28,11 @@ export async function POST(request: Request) {
     return NextResponse.json(result)
   } catch (e) {
     console.error(e)
-    return NextResponse.json({ error: 'Erro ao cotar frete.' }, { status: 500 })
+    const { fallbackShippingOption } = await import('@/lib/melhor-envio')
+    return NextResponse.json({
+      options: [fallbackShippingOption()],
+      source: 'fallback',
+      error: 'Erro ao cotar frete — frete padrão aplicado.',
+    })
   }
 }

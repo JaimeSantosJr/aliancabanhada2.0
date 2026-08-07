@@ -111,6 +111,22 @@ export default function CheckoutPage() {
     load()
   }, [])
 
+  const flatFallback = (): QuoteOption => ({
+    id: 'flat',
+    name: 'Frete padrão',
+    company: 'Aliança Banhada',
+    price: STORE.shippingFlat,
+    deliveryDays: STORE.shippingDaysMax,
+  })
+
+  const applyQuotes = (options: QuoteOption[], source: string, note: string | null) => {
+    const list = options.length ? options : [flatFallback()]
+    setQuotes(list)
+    setQuoteSource(source || (options.length ? '' : 'fallback'))
+    setQuoteNote(note)
+    setSelectedShippingId((prev) => (list.some((o) => o.id === prev) ? prev : list[0].id))
+  }
+
   const loadQuotes = async (cepRaw: string) => {
     const cep = cepRaw.replace(/\D/g, '')
     if (cep.length !== 8) return
@@ -127,21 +143,23 @@ export default function CheckoutPage() {
           productIds: items.map((i) => i.product.id),
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       const options = (data.options || []) as QuoteOption[]
-      setQuotes(options)
-      setQuoteSource(data.source || '')
-      setQuoteNote(data.error || null)
-      if (options.length) {
-        setSelectedShippingId((prev) =>
-          options.some((o) => o.id === prev) ? prev : options[0].id,
+      if (!res.ok && !options.length) {
+        applyQuotes(
+          [flatFallback()],
+          'fallback',
+          data.error || 'Cotação indisponível — frete padrão aplicado.',
         )
-      } else {
-        setSelectedShippingId('')
+        return
       }
+      applyQuotes(
+        options,
+        data.source || '',
+        data.error || (!options.length ? 'Usando frete padrão.' : null),
+      )
     } catch {
-      setQuotes([])
-      setQuoteNote('Não foi possível cotar o frete agora.')
+      applyQuotes([flatFallback()], 'fallback', 'Não foi possível cotar o frete — frete padrão aplicado.')
     } finally {
       setQuoteLoading(false)
     }
@@ -149,11 +167,13 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const cep = form.shipping_zip.replace(/\D/g, '')
-    if (cep.length === 8 && userId) {
+    if (cep.length !== 8 || !userId) return
+    const timer = window.setTimeout(() => {
       loadQuotes(cep)
-    }
+    }, 350)
+    return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subtotal, discount, userId])
+  }, [subtotal, discount, userId, form.shipping_zip])
 
   const set = (key: keyof FormState, value: string) => {
     setForm((f) => ({ ...f, [key]: value }))
@@ -332,57 +352,93 @@ export default function CheckoutPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!userId || items.length === 0) return
-    if (form.website) return
-    if (!selectedShippingId) {
-      toast.error('Selecione uma opção de frete.')
+
+    if (form.website.trim()) {
+      toast.error('Não foi possível validar o formulário. Recarregue a página e tente de novo.')
       return
     }
+    if (!userId) {
+      toast.error('Faça login para finalizar a compra.')
+      return
+    }
+    if (items.length === 0) {
+      toast.error('Seu carrinho está vazio.')
+      return
+    }
+
+    const missing: string[] = []
+    if (!form.customer_name.trim()) missing.push('nome')
+    if (!form.customer_email.trim()) missing.push('email')
+    if (!form.customer_phone.trim()) missing.push('telefone')
+    if (form.shipping_zip.replace(/\D/g, '').length !== 8) missing.push('CEP')
+    if (!form.shipping_street.trim()) missing.push('rua')
+    if (!form.shipping_number.trim()) missing.push('número')
+    if (!form.shipping_neighborhood.trim()) missing.push('bairro')
+    if (!form.shipping_city.trim()) missing.push('cidade')
+    if (!form.shipping_state.trim()) missing.push('estado')
+    if (missing.length) {
+      toast.error(`Preencha: ${missing.join(', ')}.`)
+      return
+    }
+
+    let shippingId = selectedShippingId
+    if (!shippingId || !quotes.length) {
+      applyQuotes([flatFallback()], 'fallback', 'Frete padrão aplicado automaticamente.')
+      shippingId = 'flat'
+    }
+
     setLoading(true)
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: form.customer_name,
+          customer_email: form.customer_email,
+          customer_phone: form.customer_phone,
+          shipping_street: form.shipping_street,
+          shipping_number: form.shipping_number,
+          shipping_complement: form.shipping_complement,
+          shipping_neighborhood: form.shipping_neighborhood,
+          shipping_city: form.shipping_city,
+          shipping_state: form.shipping_state,
+          shipping_zip: form.shipping_zip,
+          payment_method: form.payment_method,
+          notes: form.notes,
+          coupon_code: couponCode || undefined,
+          shipping_service_id: shippingId,
+          items: items.map((i) => ({
+            product_id: i.product.id,
+            quantity: i.quantity,
+            size: i.size,
+            size2: i.size2,
+            isPair: i.isPair,
+          })),
+        }),
+      })
 
-    const res = await fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        customer_name: form.customer_name,
-        customer_email: form.customer_email,
-        customer_phone: form.customer_phone,
-        shipping_street: form.shipping_street,
-        shipping_number: form.shipping_number,
-        shipping_complement: form.shipping_complement,
-        shipping_neighborhood: form.shipping_neighborhood,
-        shipping_city: form.shipping_city,
-        shipping_state: form.shipping_state,
-        shipping_zip: form.shipping_zip,
-        payment_method: form.payment_method,
-        notes: form.notes,
-        coupon_code: couponCode || undefined,
-        shipping_service_id: selectedShippingId,
-        items: items.map((i) => ({
-          product_id: i.product.id,
-          quantity: i.quantity,
-          size: i.size,
-          size2: i.size2,
-          isPair: i.isPair,
-        })),
-      }),
-    })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.error || 'Não foi possível criar o pedido.')
+        return
+      }
+      if (!data.id) {
+        toast.error('Pedido criado sem ID. Atualize a página e confira em Minha conta.')
+        return
+      }
 
-    const data = await res.json()
-    setLoading(false)
-
-    if (!res.ok) {
-      toast.error(data.error || 'Não foi possível criar o pedido.')
-      return
+      clear()
+      toast.success(
+        form.payment_method === 'mercadopago'
+          ? 'Pedido criado! Finalize o pagamento na próxima tela.'
+          : 'Pedido realizado!',
+      )
+      router.push(`/pedido/${data.id}`)
+    } catch {
+      toast.error('Falha de conexão ao criar o pedido. Tente de novo.')
+    } finally {
+      setLoading(false)
     }
-
-    clear()
-    toast.success(
-      form.payment_method === 'mercadopago'
-        ? 'Pedido criado! Finalize o pagamento abaixo.'
-        : 'Pedido realizado!',
-    )
-    router.push(`/pedido/${data.id}`)
   }
 
   if (checkingAuth) return <p className="center-msg page-pad">Carregando checkout...</p>
@@ -536,7 +592,7 @@ export default function CheckoutPage() {
             Voltar ao carrinho
           </Link>
         </section>
-        <form className="checkout-layout" onSubmit={submit}>
+        <form className="checkout-layout" onSubmit={submit} noValidate>
           <div className="checkout-form service-panel">
             <h2>Dados e entrega</h2>
           <div className="form-grid">
@@ -589,13 +645,13 @@ export default function CheckoutPage() {
 
           <input
             type="text"
-            name="website"
+            name="ab_hp_field"
             value={form.website}
             onChange={(e) => set('website', e.target.value)}
             tabIndex={-1}
-            autoComplete="off"
-            style={{ position: 'absolute', left: '-9999px', height: 0, width: 0, opacity: 0 }}
+            autoComplete="new-password"
             aria-hidden="true"
+            style={{ position: 'absolute', left: '-9999px', height: 0, width: 0, opacity: 0, pointerEvents: 'none' }}
           />
 
           <h2>Pagamento</h2>
@@ -687,12 +743,24 @@ export default function CheckoutPage() {
             <span>Total</span>
             <strong>{formatPrice(total)}</strong>
           </div>
-          <button type="submit" className="btn btn-block" disabled={loading || !selectedShippingId}>
+          {!selectedShippingId && !quoteLoading && (
+            <p className="cart-summary-note" role="status">
+              Informe o CEP e escolha o frete para continuar — ou o frete padrão será usado.
+            </p>
+          )}
+          <button
+            type="submit"
+            className="btn btn-block"
+            disabled={loading || quoteLoading}
+            aria-busy={loading}
+          >
             {loading
               ? 'Enviando...'
-              : form.payment_method === 'mercadopago'
-                ? 'Criar pedido e pagar'
-                : 'Confirmar pedido'}
+              : quoteLoading
+                ? 'Calculando frete...'
+                : form.payment_method === 'mercadopago'
+                  ? 'Criar pedido e pagar'
+                  : 'Confirmar pedido'}
           </button>
         </aside>
       </form>
