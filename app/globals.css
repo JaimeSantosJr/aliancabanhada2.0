@@ -1432,7 +1432,13 @@ footer {
 }
 
 /* ===== Account ===== */
-.account-page { padding: 48px 0 90px; background: #f7f6f3; min-height: 70vh; }
+.account-page {
+  padding: 48px 0 90px;
+  min-height: 70vh;
+  background:
+    radial-gradient(ellipse at top, rgba(212, 175, 55, 0.1), transparent 55%),
+    linear-gradient(180deg, #faf8f4 0%, #f3f1ec 48%, #fff 100%);
+}
 .account-hero {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -1441,19 +1447,29 @@ footer {
   padding: 28px 0 36px;
   border-bottom: 1px solid #e6e2d8;
   margin-bottom: 32px;
+  animation: account-fade-up 0.55s ease both;
 }
 .account-avatar {
-  width: 72px; height: 72px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: #1a1a1a; color: #f3e3a5;
-  font-family: var(--serif); letter-spacing: 0.08em; font-size: 22px;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #1a1a1a;
+  color: #f3e3a5;
+  font-family: var(--serif);
+  letter-spacing: 0.08em;
+  font-size: 22px;
 }
 .account-hero h1 {
-  font-family: var(--serif); font-size: 32px; letter-spacing: 0.1em;
-  text-transform: uppercase; margin: 4px 0 6px;
+  font-family: var(--serif);
+  font-size: clamp(26px, 4vw, 34px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 4px 0 6px;
 }
-.account-hero p { color: #666; }
-.account-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.account-hero__copy p { color: #666; }
+.account-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .account-shell {
   display: grid;
   grid-template-columns: 220px 1fr;
@@ -1461,38 +1477,205 @@ footer {
   align-items: start;
 }
 .account-nav {
-  display: flex; flex-direction: column; gap: 6px;
-  background: #fff; border: 1px solid #ebe7de; padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid #ebe7de;
+  padding: 12px;
+  position: sticky;
+  top: 88px;
 }
 .account-nav button {
-  text-align: left; border: 0; background: transparent; cursor: pointer;
-  padding: 14px 16px; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase;
-  font-family: var(--sans); color: #444;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 14px 16px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: var(--sans);
+  color: #444;
+  transition: background 0.2s ease, color 0.2s ease;
 }
+.account-nav button:hover { background: #f4f1ea; color: #111; }
 .account-nav button.is-active { background: #1a1a1a; color: #fff; }
 .account-panel {
-  background: #fff; border: 1px solid #ebe7de; padding: 36px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ebe7de;
+  padding: 36px;
+  animation: account-fade-up 0.45s ease both;
 }
 .panel-intro { margin-bottom: 28px; }
 .panel-intro h2 {
-  font-family: var(--serif); letter-spacing: 0.12em; text-transform: uppercase;
-  font-size: 22px; margin-bottom: 8px;
+  font-family: var(--serif);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 22px;
+  margin-bottom: 8px;
 }
 .panel-intro p { color: #777; }
 .account-form-v2 .form-grid { margin-bottom: 24px; }
+.account-form-v2 label small { display: block; margin-top: 6px; font-size: 12px; letter-spacing: 0; text-transform: none; }
 .form-grid.single { grid-template-columns: 1fr; max-width: 420px; }
+.account-form-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
 .empty-state { text-align: center; padding: 48px 20px; color: #666; }
+.empty-state .muted { margin-top: 8px; }
 .empty-state .btn { margin-top: 18px; }
+
+.account-section-label {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8a7a5c;
+  margin-bottom: 12px;
+}
+.account-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 28px;
+}
+.account-shortcuts button {
+  border: 1px solid #e6e2d8;
+  background: #fff;
+  padding: 16px 14px;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #333;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.account-shortcuts button:hover {
+  border-color: #1a1a1a;
+  background: #faf8f4;
+}
+.account-home__hint {
+  margin-top: 18px;
+  color: #666;
+  font-size: 14px;
+}
+.account-home__hint .linkish {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #111;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.account-order-list {
+  list-style: none;
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+}
+.account-order-card {
+  display: grid;
+  gap: 14px;
+  padding: 22px 22px 18px;
+  border: 1px solid #ebe7de;
+  background: #fafaf8;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.account-order-card:hover {
+  border-color: #cfc7b6;
+  transform: translateY(-1px);
+}
+.account-order-card.is-featured {
+  background: linear-gradient(180deg, #fff 0%, #faf8f4 100%);
+  border-color: #d8d0c0;
+}
+.account-order-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+.account-order-card__kicker {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 4px;
+}
+.account-order-card__number {
+  font-family: var(--serif);
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.account-order-card__total {
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.account-order-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-order-card__meta {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: #555;
+}
+.account-order-card__meta code {
+  font-family: var(--sans);
+  letter-spacing: 0.04em;
+  background: #f0ece4;
+  padding: 2px 6px;
+}
+.account-order-card__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.status-chip {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  background: #1a1a1a;
+  color: #fff;
+}
+.status-chip.is-pending { background: #6b5a3c; }
+.status-chip.is-progress { background: #1a1a1a; }
+.status-chip.is-done { background: #2f4a3a; }
+.status-chip.is-cancelled { background: #7a2e2e; }
+
+@keyframes account-fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-hero,
+  .account-panel,
+  .account-order-card {
+    animation: none;
+    transition: none;
+  }
+  .account-order-card:hover { transform: none; }
+}
+
+/* legacy list kept for safety */
 .order-cards { list-style: none; display: grid; gap: 12px; }
 .order-cards li {
   display: grid; gap: 8px; padding: 18px; border: 1px solid #eee; background: #fafafa;
 }
 .order-cards li > div:first-child { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
-.status-chip {
-  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
-  padding: 6px 10px; background: #1a1a1a; color: #fff;
-}
 .order-cards a { color: #111; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+
 
 /* ===== Product detail ===== */
 .pdp { padding: 24px 0 90px; }
@@ -1722,7 +1905,24 @@ footer {
     grid-template-columns: 1fr;
   }
   .admin-sidebar { position: relative; height: auto; }
+  .account-nav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    gap: 4px;
+    padding: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .account-nav button {
+    white-space: nowrap;
+    flex: 0 0 auto;
+    padding: 12px 14px;
+  }
+  .account-panel { padding: 24px 18px; }
+  .account-shortcuts { grid-template-columns: 1fr; }
   .account-hero { grid-template-columns: 1fr; }
+  .account-hero-actions { justify-content: flex-start; }
+  .account-order-card__top { flex-direction: column; }
   .cart-list-v2 > li { grid-template-columns: 90px 1fr; }
   .cart-summary-v2 { position: static; }
   .admin-table button, .admin-table.dense button { grid-template-columns: 1fr 1fr; }

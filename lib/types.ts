@@ -125,6 +125,13 @@ export const ORDER_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Cancelado',
 }
 
+export const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pagamento pendente',
+  paid: 'Pago',
+  failed: 'Pagamento recusado',
+  refunded: 'Estornado',
+}
+
 /** Etapas visíveis ao cliente (estilo acompanhamento de compra). */
 export const ORDER_TRACK_STEPS = [
   { key: 'pending', label: 'Pedido feito', hint: 'Registramos seu pedido' },
