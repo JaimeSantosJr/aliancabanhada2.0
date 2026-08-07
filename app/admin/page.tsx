@@ -476,10 +476,13 @@ export default function AdminPage() {
         {sidebarOpen ? 'Fechar' : 'Menu'}
       </button>
 
-      <aside className="admin-sidebar">
+      <aside className="admin-sidebar admin-rail">
         <div className="admin-brand">
-          <span>Aliança Banhada</span>
-          <small>Console</small>
+          <div className="admin-brand-mono" aria-hidden>AB</div>
+          <div>
+            <span>Aliança Banhada</span>
+            <small>Atelier · Console</small>
+          </div>
         </div>
         <div className="admin-user-chip">
           <strong>Admin</strong>
@@ -501,9 +504,6 @@ export default function AdminPage() {
           ))}
         </nav>
         <div className="admin-sidebar-foot">
-          <button type="button" className="admin-theme-toggle" onClick={toggleTheme}>
-            Tema: {theme === 'dark' ? 'Escuro' : 'Claro'} (alternar)
-          </button>
           <button type="button" onClick={() => reload()} disabled={loadingData}>
             {loadingData ? 'Atualizando...' : 'Atualizar dados'}
           </button>
@@ -516,11 +516,22 @@ export default function AdminPage() {
       <div className="admin-main">
         <div className="admin-topbar">
           <div>
-            <p className="admin-kicker">Operação da loja</p>
+            <p className="admin-kicker">Bancada da loja</p>
             <h1>{NAV.find((n) => n.id === tab)?.label}</h1>
-            <p>Somente alianças e solitários · banho de ouro ou ouro</p>
+            <p>Alianças e solitários · banho de ouro ou ouro</p>
           </div>
           <div className="admin-topbar-actions">
+            <button
+              type="button"
+              className="admin-theme-toggle"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+            >
+              <span className="admin-theme-toggle__icon" aria-hidden>
+                {theme === 'dark' ? '○' : '●'}
+              </span>
+              {theme === 'dark' ? 'Claro' : 'Escuro'}
+            </button>
             {tab === 'products' && (
               <button
                 type="button"
@@ -539,21 +550,21 @@ export default function AdminPage() {
         {tab === 'overview' && (
           <section className="admin-section">
             <div className="admin-kpi-grid">
-              <article>
+              <article className="admin-kpi">
                 <span>Receita confirmada</span>
                 <strong>{formatPrice(stats.revenue)}</strong>
               </article>
-              <article>
+              <article className="admin-kpi">
                 <span>Pedidos</span>
                 <strong>{stats.orders}</strong>
                 <small>{stats.pending} aguardando pagamento</small>
               </article>
-              <article>
+              <article className="admin-kpi">
                 <span>Catálogo</span>
                 <strong>{stats.products}</strong>
                 <small>{stats.inStock} disponíveis</small>
               </article>
-              <article>
+              <article className="admin-kpi">
                 <span>Inbox</span>
                 <strong>{stats.messages + stats.customs}</strong>
                 <small>{stats.subscribers} na newsletter</small>
@@ -572,7 +583,9 @@ export default function AdminPage() {
                       <button type="button" onClick={() => { goTab('orders'); openOrder(o) }}>
                         <strong>{o.order_number || o.id.slice(0, 8)}</strong>
                         <span>{o.customer_name || '—'}</span>
-                        <span>{ORDER_STATUS_LABELS[o.status] || o.status}</span>
+                        <em className={`admin-status-chip is-${o.status}`}>
+                          {ORDER_STATUS_LABELS[o.status] || o.status}
+                        </em>
                         <span>{formatPrice(o.total_price)}</span>
                       </button>
                     </li>
@@ -591,7 +604,7 @@ export default function AdminPage() {
                       <div>
                         <strong>{c.name}</strong>
                         <span>{categoryLabel(c.product_type)} · {materialLabel(c.material)}</span>
-                        <span>{c.status || 'novo'}</span>
+                        <em className="admin-status-chip is-pending">{c.status || 'novo'}</em>
                       </div>
                     </li>
                   ))}
@@ -734,7 +747,9 @@ export default function AdminPage() {
                     <button type="button" onClick={() => openOrder(o)}>
                       <strong>{o.order_number || o.id.slice(0, 8)}</strong>
                       <span>{o.customer_name || '—'}</span>
-                      <span>{ORDER_STATUS_LABELS[o.status] || o.status}</span>
+                      <em className={`admin-status-chip is-${o.status}`}>
+                        {ORDER_STATUS_LABELS[o.status] || o.status}
+                      </em>
                       <span>{formatPrice(o.total_price)}</span>
                       <span>{new Date(o.created_at).toLocaleDateString('pt-BR')}</span>
                     </button>
@@ -755,31 +770,39 @@ export default function AdminPage() {
                     <h2>{selectedOrder.order_number || selectedOrder.id.slice(0, 8)}</h2>
                     <Link href={`/pedido/${selectedOrder.id}`}>Abrir página</Link>
                   </div>
-                  <p className="admin-meta">
-                    {ORDER_STATUS_LABELS[selectedOrder.status] || selectedOrder.status}
-                    {' · '}
-                    {(selectedOrder.payment_method || 'pix').toUpperCase()}
-                    {' · '}
-                    {selectedOrder.payment_status || 'pending'}
-                  </p>
+                  <div className="admin-meta-row">
+                    <em className={`admin-status-chip is-${selectedOrder.status}`}>
+                      {ORDER_STATUS_LABELS[selectedOrder.status] || selectedOrder.status}
+                    </em>
+                    <em className="admin-status-chip">
+                      {(selectedOrder.payment_method || 'pix').toUpperCase()}
+                    </em>
+                    <em className={`admin-status-chip is-${selectedOrder.payment_status === 'paid' ? 'paid' : 'pending'}`}>
+                      {selectedOrder.payment_status || 'pending'}
+                    </em>
+                  </div>
+
                   <div className="admin-detail-block">
+                    <div className="admin-detail-label">Cliente</div>
                     <strong>{selectedOrder.customer_name}</strong>
                     <span>{selectedOrder.customer_email}</span>
                     <span>{selectedOrder.customer_phone}</span>
                   </div>
-                  <label style={{ display: 'block', marginBottom: 12 }}>
+
+                  <label className="admin-field">
                     CPF/CNPJ (NF-e)
                     <input
                       value={documentDraft}
                       onChange={(e) => setDocumentDraft(e.target.value)}
                       placeholder="Somente numeros"
-                      style={{ width: '100%', marginTop: 6 }}
                     />
                   </label>
-                  <button type="button" className="admin-btn ghost" onClick={saveDocument} style={{ marginBottom: 12 }}>
+                  <button type="button" className="admin-btn ghost" onClick={saveDocument} style={{ marginBottom: 16 }}>
                     Salvar documento
                   </button>
+
                   <div className="admin-detail-block">
+                    <div className="admin-detail-label">Entrega</div>
                     <span>
                       {selectedOrder.shipping_street}, {selectedOrder.shipping_number}
                       {selectedOrder.shipping_complement ? ` — ${selectedOrder.shipping_complement}` : ''}
@@ -789,6 +812,7 @@ export default function AdminPage() {
                     </span>
                     <span>CEP {selectedOrder.shipping_zip}</span>
                   </div>
+
                   <ul className="admin-lines">
                     {orderItems.map((item) => (
                       <li key={item.id}>
@@ -819,16 +843,16 @@ export default function AdminPage() {
                     <span>Total</span>
                     <strong>{formatPrice(selectedOrder.total_price)}</strong>
                   </p>
-                  <label style={{ display: 'block', marginBottom: 12 }}>
+
+                  <label className="admin-field">
                     Código de rastreio
                     <input
                       value={trackingDraft}
                       onChange={(e) => setTrackingDraft(e.target.value)}
                       placeholder="BR123456789BR"
-                      style={{ width: '100%', marginTop: 6 }}
                     />
                   </label>
-                  <div className="admin-row-actions" style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <div className="admin-row-actions inline" style={{ marginBottom: 16 }}>
                     <button type="button" className="admin-btn" onClick={saveTracking}>
                       Salvar rastreio
                     </button>
@@ -846,6 +870,7 @@ export default function AdminPage() {
                       {selectedOrder.nfe_error ? ` · ${selectedOrder.nfe_error}` : ''}
                     </p>
                   )}
+                  <div className="admin-detail-label">Status do pedido</div>
                   <div className="admin-status-actions">
                     {STATUS_FLOW.map((s) => (
                       <button

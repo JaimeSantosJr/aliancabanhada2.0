@@ -36,8 +36,10 @@ export function AdminRoot({ children }: { children: React.ReactNode }) {
     if (!ready) return
     localStorage.setItem(KEY, theme)
     document.documentElement.dataset.adminTheme = theme
+    document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark'
     return () => {
       delete document.documentElement.dataset.adminTheme
+      document.documentElement.style.colorScheme = ''
     }
   }, [theme, ready])
 
