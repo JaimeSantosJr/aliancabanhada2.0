@@ -44,7 +44,12 @@ export async function productsAllFreeShipping(
   const db = client || createServiceClient() || publicDb()
   if (!db) return false
 
-  const { data } = await db.from('products').select('id,free_shipping').in('id', ids)
+  const { data, error } = await db.from('products').select('id,free_shipping').in('id', ids)
+  if (error) {
+    // Coluna ainda não existe no banco — trata como sem frete grátis.
+    if (error.message?.includes('free_shipping') || error.code === 'PGRST204') return false
+    return false
+  }
   if (!data || data.length !== ids.length) return false
   return data.every((p) => Boolean(p.free_shipping))
 }

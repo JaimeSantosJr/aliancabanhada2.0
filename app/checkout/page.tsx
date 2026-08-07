@@ -419,6 +419,11 @@ export default function CheckoutPage() {
 
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
+        if (data.code === 'STALE_CART') {
+          clear()
+          toast.error(data.error || 'Carrinho desatualizado. Adicione os produtos de novo.')
+          return
+        }
         toast.error(data.error || 'Não foi possível criar o pedido.')
         return
       }

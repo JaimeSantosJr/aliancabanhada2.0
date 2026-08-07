@@ -47,14 +47,80 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Faça login para finalizar.' }, { status: 401 })
     }
 
-    const ids = [...new Set(body.items.map((i) => i.product_id))]
-    const { data: products, error: prodErr } = await supabase
-      .from('products')
-      .select('id,name,price,in_stock,free_shipping')
-      .in('id', ids)
+    const ids = [...new Set(body.items.map((i) => i.product_id).filter(Boolean))]
+    if (!ids.length) {
+      return NextResponse.json(
+        { error: 'Carrinho sem produtos válidos. Limpe o carrinho e adicione de novo.' },
+        { status: 400 },
+      )
+    }
 
-    if (prodErr || !products?.length) {
-      return NextResponse.json({ error: 'Produtos inválidos.' }, { status: 400 })
+    // Preferir service role no checkout (evita RLS / schema desatualizado no client).
+    const db = createServiceClient() || supabase
+
+    let products: Array<{
+      id: string
+      name: string
+      price: number
+      in_stock: boolean
+      free_shipping?: boolean | null
+    }> | null = null
+    let prodErr: { message?: string; code?: string } | null = null
+
+    {
+      const first = await db
+        .from('products')
+        .select('id,name,price,in_stock,free_shipping')
+        .in('id', ids)
+
+      if (
+        first.error &&
+        (first.error.message?.includes('free_shipping') || first.error.code === 'PGRST204')
+      ) {
+        const fallback = await db
+          .from('products')
+          .select('id,name,price,in_stock')
+          .in('id', ids)
+        products = (fallback.data as typeof products) || null
+        prodErr = fallback.error
+      } else {
+        products = (first.data as typeof products) || null
+        prodErr = first.error
+      }
+    }
+
+    if (prodErr) {
+      console.error('orders products query', prodErr)
+      return NextResponse.json(
+        {
+          error: prodErr.message?.includes('free_shipping')
+            ? 'Banco desatualizado. Execute supabase/security.sql no Supabase (coluna free_shipping).'
+            : `Não foi possível ler os produtos: ${prodErr.message || 'erro desconhecido'}`,
+        },
+        { status: 400 },
+      )
+    }
+
+    if (!products?.length) {
+      return NextResponse.json(
+        {
+          error:
+            'Produtos do carrinho não existem mais no catálogo. Esvazie o carrinho, adicione as peças de novo e tente outra vez.',
+          code: 'STALE_CART',
+        },
+        { status: 400 },
+      )
+    }
+
+    if (products.length < ids.length) {
+      return NextResponse.json(
+        {
+          error:
+            'Algum produto do carrinho foi removido ou alterado. Esvazie o carrinho e adicione de novo.',
+          code: 'STALE_CART',
+        },
+        { status: 400 },
+      )
     }
 
     const byId = new Map(products.map((p) => [p.id, p]))
