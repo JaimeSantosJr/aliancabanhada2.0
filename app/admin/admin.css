@@ -1,8 +1,14 @@
-/* Admin console — scoped under .admin-root to beat storefront CSS */
+/* Admin console — scoped under .admin-root (unica fonte de estilo do admin) */
 
 body:has(.admin-root) {
   background: var(--ad-bg, #09090b) !important;
   color: var(--ad-text, #f4f1ea) !important;
+}
+
+body:has(.admin-root[data-theme='light']),
+html:has(.admin-root[data-theme='light']) {
+  background: #f4f1ea !important;
+  color: #1a1a1a !important;
 }
 
 .admin-root {
@@ -17,12 +23,20 @@ body:has(.admin-root) {
   --ad-danger: #f07178;
   --ad-sidebar: linear-gradient(180deg, #0e0e12 0%, #0a0a0d 100%);
   --ad-input-bg: #0c0c10;
+  --ad-hover: #1a1a22;
+  --ad-nav: #b8b4aa;
+  --ad-nav-active: #ffffff;
+  --ad-kpi: linear-gradient(160deg, #17171d, #111116);
+  --ad-on-gold: #111111;
+  --ad-spinner-track: #333333;
+  --ad-pill-border: #444444;
+  --ad-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
   min-height: 100vh;
   background: var(--ad-bg) !important;
   color: var(--ad-text) !important;
 }
 
-.admin-root[data-theme="light"] {
+.admin-root[data-theme='light'] {
   --ad-bg: #f4f1ea;
   --ad-panel: #ffffff;
   --ad-panel-2: #faf8f4;
@@ -30,10 +44,18 @@ body:has(.admin-root) {
   --ad-text: #1a1a1a;
   --ad-muted: #6b675e;
   --ad-gold: #9a7b1a;
-  --ad-gold-soft: #c2a84a;
+  --ad-gold-soft: #b8962e;
   --ad-danger: #b42318;
-  --ad-sidebar: linear-gradient(180deg, #fff 0%, #f7f4ec 100%);
-  --ad-input-bg: #fff;
+  --ad-sidebar: linear-gradient(180deg, #ffffff 0%, #f7f4ec 100%);
+  --ad-input-bg: #ffffff;
+  --ad-hover: #f0ebe0;
+  --ad-nav: #5c584f;
+  --ad-nav-active: #1a1a1a;
+  --ad-kpi: linear-gradient(160deg, #ffffff, #f7f4ec);
+  --ad-on-gold: #111111;
+  --ad-spinner-track: #d8d2c4;
+  --ad-pill-border: #d0c9b8;
+  --ad-shadow: 0 8px 24px rgba(26, 26, 26, 0.06);
 }
 
 .admin-root *,
@@ -72,34 +94,36 @@ body:has(.admin-root) {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background: var(--ad-bg);
-  color: var(--ad-muted);
+  background: var(--ad-bg) !important;
+  color: var(--ad-muted) !important;
 }
 
 .admin-spinner {
   width: 32px;
   height: 32px;
-  border: 2px solid #333;
+  border: 2px solid var(--ad-spinner-track);
   border-top-color: var(--ad-gold);
   border-radius: 50%;
   animation: admin-spin 0.75s linear infinite;
 }
 
 @keyframes admin-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .admin-app {
   display: grid;
   grid-template-columns: 260px 1fr;
   min-height: 100vh;
-  background: var(--ad-bg);
-  color: var(--ad-text);
+  background: var(--ad-bg) !important;
+  color: var(--ad-text) !important;
 }
 
 .admin-sidebar {
-  background: var(--ad-sidebar);
-  border-right: 1px solid var(--ad-line);
+  background: var(--ad-sidebar) !important;
+  border-right: 1px solid var(--ad-line) !important;
   padding: 28px 16px;
   display: flex;
   flex-direction: column;
@@ -122,7 +146,7 @@ body:has(.admin-root) {
 .admin-brand small {
   display: block;
   margin-top: 6px;
-  color: var(--ad-gold);
+  color: var(--ad-gold) !important;
   letter-spacing: 0.24em;
   text-transform: uppercase;
   font-size: 10px;
@@ -130,8 +154,8 @@ body:has(.admin-root) {
 
 .admin-user-chip {
   padding: 12px 14px;
-  border: 1px solid var(--ad-line);
-  background: var(--ad-panel);
+  border: 1px solid var(--ad-line) !important;
+  background: var(--ad-panel) !important;
   display: grid;
   gap: 4px;
 }
@@ -140,12 +164,12 @@ body:has(.admin-root) {
   font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ad-gold);
+  color: var(--ad-gold) !important;
 }
 
 .admin-user-chip span {
   font-size: 12px;
-  color: var(--ad-muted);
+  color: var(--ad-muted) !important;
   word-break: break-all;
 }
 
@@ -162,7 +186,7 @@ body:has(.admin-root) {
   text-align: left;
   border: 0;
   background: transparent;
-  color: #b8b4aa !important;
+  color: var(--ad-nav) !important;
   cursor: pointer;
   padding: 12px 14px;
   font-size: 11px;
@@ -170,24 +194,26 @@ body:has(.admin-root) {
   text-transform: uppercase;
   font-family: var(--font-sans), system-ui, sans-serif;
   border-radius: 8px;
-  transition: background 0.2s, color 0.2s;
+  transition:
+    background 0.2s,
+    color 0.2s;
 }
 
 .admin-sidebar nav button:hover {
-  background: #1a1a22;
-  color: #fff !important;
+  background: var(--ad-hover) !important;
+  color: var(--ad-nav-active) !important;
 }
 
 .admin-sidebar nav button.is-active {
-  background: linear-gradient(90deg, rgba(212, 175, 55, 0.18), transparent);
-  color: #fff !important;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ad-gold) 22%, transparent), transparent) !important;
+  color: var(--ad-nav-active) !important;
   box-shadow: inset 3px 0 0 var(--ad-gold);
 }
 
 .admin-sidebar nav em {
   font-style: normal;
   background: var(--ad-gold);
-  color: #111;
+  color: var(--ad-on-gold);
   min-width: 20px;
   height: 20px;
   border-radius: 999px;
@@ -228,12 +254,12 @@ body:has(.admin-root) {
 .admin-main {
   padding: 28px 36px 64px;
   background:
-    radial-gradient(ellipse at top right, rgba(212, 175, 55, 0.08), transparent 40%),
-    var(--ad-bg);
+    radial-gradient(ellipse at top right, color-mix(in srgb, var(--ad-gold) 12%, transparent), transparent 40%),
+    var(--ad-bg) !important;
+  color: var(--ad-text) !important;
   min-width: 0;
 }
 
-/* CRITICAL: beat global `header { background: white }` */
 .admin-root header.admin-topbar,
 .admin-root .admin-topbar {
   display: flex !important;
@@ -281,7 +307,7 @@ body:has(.admin-root) {
 .admin-btn {
   border: 0;
   background: var(--ad-gold);
-  color: #111 !important;
+  color: var(--ad-on-gold) !important;
   padding: 12px 18px;
   font-size: 11px;
   letter-spacing: 0.14em;
@@ -291,8 +317,14 @@ body:has(.admin-root) {
   border-radius: 4px;
 }
 
-.admin-btn:hover { background: var(--ad-gold-soft); }
-.admin-btn:disabled { opacity: 0.55; cursor: wait; }
+.admin-btn:hover {
+  background: var(--ad-gold-soft);
+}
+
+.admin-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
 
 .admin-btn.ghost {
   background: transparent;
@@ -308,21 +340,23 @@ body:has(.admin-root) {
 }
 
 .admin-kpi-grid article {
-  background: linear-gradient(160deg, #17171d, #111116);
-  border: 1px solid var(--ad-line);
+  background: var(--ad-kpi) !important;
+  border: 1px solid var(--ad-line) !important;
   padding: 22px 20px;
   border-radius: 12px;
   position: relative;
   overflow: hidden;
+  box-shadow: var(--ad-shadow);
+  color: var(--ad-text) !important;
 }
 
 .admin-kpi-grid article::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: auto -20% -40% auto;
   width: 120px;
   height: 120px;
-  background: radial-gradient(circle, rgba(212, 175, 55, 0.18), transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--ad-gold) 18%, transparent), transparent 70%);
   pointer-events: none;
 }
 
@@ -358,16 +392,25 @@ body:has(.admin-root) {
   gap: 14px;
 }
 
-.admin-split { grid-template-columns: 1fr 1fr; }
-.admin-products { grid-template-columns: 0.95fr 1.05fr; align-items: start; }
-.admin-orders-layout { grid-template-columns: 1.1fr 0.9fr; align-items: start; }
+.admin-split {
+  grid-template-columns: 1fr 1fr;
+}
+.admin-products {
+  grid-template-columns: 0.95fr 1.05fr;
+  align-items: start;
+}
+.admin-orders-layout {
+  grid-template-columns: 1.1fr 0.9fr;
+  align-items: start;
+}
 
 .admin-card {
   background: var(--ad-panel) !important;
   border: 1px solid var(--ad-line) !important;
   padding: 22px;
   border-radius: 12px;
-  color: var(--ad-text);
+  color: var(--ad-text) !important;
+  box-shadow: var(--ad-shadow);
 }
 
 .admin-card-head {
@@ -414,7 +457,7 @@ body:has(.admin-root) {
 }
 
 .admin-table li {
-  border-bottom: 1px solid #23232c;
+  border-bottom: 1px solid var(--ad-line) !important;
 }
 
 .admin-table button,
@@ -427,7 +470,7 @@ body:has(.admin-root) {
   padding: 14px 4px;
   background: none;
   border: 0;
-  color: #d8d4cb !important;
+  color: var(--ad-text) !important;
   cursor: pointer;
   font-family: var(--font-sans), system-ui, sans-serif;
   font-size: 13px;
@@ -438,7 +481,7 @@ body:has(.admin-root) {
 }
 
 .admin-table li.is-selected button {
-  color: var(--ad-gold-soft) !important;
+  color: var(--ad-gold) !important;
 }
 
 .admin-table .empty,
@@ -462,7 +505,8 @@ body:has(.admin-root) {
   gap: 12px;
 }
 
-.admin-root .admin-form label {
+.admin-root .admin-form label,
+.admin-root .admin-card > label {
   display: grid !important;
   gap: 6px;
   font-size: 10px;
@@ -476,23 +520,36 @@ body:has(.admin-root) {
 .admin-root .admin-form select,
 .admin-root .admin-search,
 .admin-root .admin-filters select,
-.admin-root .admin-inbox select {
+.admin-root .admin-inbox select,
+.admin-root .admin-card input,
+.admin-root .admin-card textarea,
+.admin-root .admin-card select {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid var(--ad-line) !important;
-  background: #0c0c10 !important;
+  background: var(--ad-input-bg) !important;
   color: var(--ad-text) !important;
   font-family: var(--font-sans), system-ui, sans-serif;
   border-radius: 6px;
   font-size: 14px;
 }
 
+.admin-root .admin-form input::placeholder,
+.admin-root .admin-card input::placeholder,
+.admin-root .admin-search::placeholder {
+  color: var(--ad-muted) !important;
+  opacity: 0.85;
+}
+
 .admin-root .admin-form input:focus,
 .admin-root .admin-form textarea:focus,
 .admin-root .admin-form select:focus,
-.admin-root .admin-search:focus {
-  outline: 1px solid rgba(212, 175, 55, 0.55);
-  border-color: rgba(212, 175, 55, 0.55) !important;
+.admin-root .admin-search:focus,
+.admin-root .admin-card input:focus,
+.admin-root .admin-card textarea:focus,
+.admin-root .admin-card select:focus {
+  outline: 1px solid color-mix(in srgb, var(--ad-gold) 55%, transparent);
+  border-color: color-mix(in srgb, var(--ad-gold) 55%, transparent) !important;
 }
 
 .admin-preview {
@@ -544,7 +601,8 @@ body:has(.admin-root) {
   gap: 14px;
   align-items: center;
   padding: 12px 0;
-  border-bottom: 1px solid #23232c;
+  border-bottom: 1px solid var(--ad-line) !important;
+  color: var(--ad-text) !important;
 }
 
 .admin-product-grid img {
@@ -571,13 +629,13 @@ body:has(.admin-root) {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 4px 8px;
-  border: 1px solid #444;
+  border: 1px solid var(--ad-pill-border);
   border-radius: 999px;
 }
 
 .stock-pill.on {
   color: var(--ad-gold) !important;
-  border-color: rgba(212, 175, 55, 0.5);
+  border-color: color-mix(in srgb, var(--ad-gold) 50%, transparent);
 }
 
 .stock-pill.off {
@@ -618,8 +676,12 @@ body:has(.admin-root) {
   display: grid;
   gap: 4px;
   margin-bottom: 14px;
-  color: #d0ccc3 !important;
+  color: var(--ad-text) !important;
   font-size: 14px;
+}
+
+.admin-detail-block span {
+  color: var(--ad-muted) !important;
 }
 
 .admin-detail-block strong {
@@ -637,16 +699,21 @@ body:has(.admin-root) {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid #23232c;
+  border-bottom: 1px solid var(--ad-line) !important;
   font-size: 13px;
-  color: #d0ccc3;
+  color: var(--ad-text) !important;
 }
 
-.admin-root .summary-total {
+.admin-lines li strong {
+  color: var(--ad-text) !important;
+}
+
+.admin-root .summary-total,
+.admin-root .admin-app .summary-total {
   display: flex;
   justify-content: space-between;
   color: var(--ad-text) !important;
-  border-top: 1px solid var(--ad-line);
+  border-top: 1px solid var(--ad-line) !important;
   padding-top: 14px;
   margin: 16px 0 20px;
 }
@@ -658,9 +725,9 @@ body:has(.admin-root) {
 }
 
 .admin-status-actions button {
-  border: 1px solid var(--ad-line);
-  background: #0c0c10;
-  color: #ddd !important;
+  border: 1px solid var(--ad-line) !important;
+  background: var(--ad-input-bg) !important;
+  color: var(--ad-text) !important;
   padding: 10px 12px;
   cursor: pointer;
   font-size: 10px;
@@ -671,9 +738,9 @@ body:has(.admin-root) {
 }
 
 .admin-status-actions button.is-active {
-  background: var(--ad-gold);
-  color: #111 !important;
-  border-color: var(--ad-gold);
+  background: var(--ad-gold) !important;
+  color: var(--ad-on-gold) !important;
+  border-color: var(--ad-gold) !important;
 }
 
 .admin-inbox {
@@ -689,9 +756,10 @@ body:has(.admin-root) {
   grid-template-columns: 1fr auto;
   gap: 16px;
   padding: 16px;
-  border: 1px solid var(--ad-line);
-  background: var(--ad-panel-2);
+  border: 1px solid var(--ad-line) !important;
+  background: var(--ad-panel-2) !important;
   border-radius: 10px;
+  color: var(--ad-text) !important;
 }
 
 .admin-inbox span,
@@ -740,8 +808,8 @@ body:has(.admin-root) {
     right: 16px;
     z-index: 60;
     border: 1px solid var(--ad-line);
-    background: #1a1a22;
-    color: #fff !important;
+    background: var(--ad-panel) !important;
+    color: var(--ad-text) !important;
     padding: 10px 14px;
     font-size: 11px;
     letter-spacing: 0.12em;
@@ -768,7 +836,7 @@ body:has(.admin-root) {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(0, 0, 0, 0.45);
     border: 0;
     z-index: 40;
   }

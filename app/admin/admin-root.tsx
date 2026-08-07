@@ -35,6 +35,10 @@ export function AdminRoot({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ready) return
     localStorage.setItem(KEY, theme)
+    document.documentElement.dataset.adminTheme = theme
+    return () => {
+      delete document.documentElement.dataset.adminTheme
+    }
   }, [theme, ready])
 
   const setTheme = (t: Theme) => setThemeState(t)
