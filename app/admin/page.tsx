@@ -1,9 +1,11 @@
 'use client'
 
 import { categoryLabel, formatPrice, materialLabel } from '@/lib/format'
+import { printOrderShippingLabel } from '@/lib/print-shipping-label'
 import { ORDER_STATUS_LABELS } from '@/lib/types'
 import type { Coupon, Order, Product } from '@/lib/types'
 import { createClient } from '@/lib/supabase/client'
+import { useAdminTheme } from './admin-root'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -57,6 +59,7 @@ const emptyProduct = {
   size_range: '12,13,14,15,16,17,18,19,20,21,22,23,24',
   in_stock: true,
   free_shipping: false,
+  stock_qty: '',
 }
 
 const STATUS_FLOW = ['pending', 'paid', 'preparing', 'shipped', 'delivered', 'cancelled'] as const
@@ -99,6 +102,8 @@ export default function AdminPage() {
   const [savingProduct, setSavingProduct] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [trackingDraft, setTrackingDraft] = useState('')
+  const [documentDraft, setDocumentDraft] = useState('')
+  const [nfeLoading, setNfeLoading] = useState(false)
   const [query, setQuery] = useState('')
   const [orderQuery, setOrderQuery] = useState('')
   const [orderFilter, setOrderFilter] = useState('all')
@@ -107,6 +112,7 @@ export default function AdminPage() {
   const [adminEmail, setAdminEmail] = useState('')
   const router = useRouter()
   const supabase = createClient()
+  const { theme, toggleTheme } = useAdminTheme()
 
   const reload = useCallback(async () => {
     setLoadingData(true)
@@ -223,6 +229,7 @@ export default function AdminPage() {
       size_range: form.size_range,
       in_stock: form.in_stock,
       free_shipping: form.free_shipping,
+      stock_qty: form.stock_qty === '' ? null : Number(form.stock_qty),
     }
     const { error } = editingId
       ? await supabase.from('products').update(payload).eq('id', editingId)
@@ -247,6 +254,7 @@ export default function AdminPage() {
       size_range: p.size_range || '',
       in_stock: p.in_stock,
       free_shipping: Boolean(p.free_shipping),
+      stock_qty: p.stock_qty != null ? String(p.stock_qty) : '',
     })
     goTab('products')
   }
@@ -274,6 +282,7 @@ export default function AdminPage() {
   const openOrder = async (order: Order) => {
     setSelectedOrder(order)
     setTrackingDraft(order.tracking_code || '')
+    setDocumentDraft(order.customer_document || '')
     const { data, error } = await supabase.from('order_items').select('*').eq('order_id', order.id)
     if (error) toast.error(error.message)
     setOrderItems((data as OrderItemRow[]) || [])
@@ -289,6 +298,56 @@ export default function AdminPage() {
     toast.success('Rastreio salvo')
     setSelectedOrder({ ...selectedOrder, tracking_code: trackingDraft.trim() || null })
     await reload()
+  }
+
+  const saveDocument = async () => {
+    if (!selectedOrder) return
+    const { error } = await supabase
+      .from('orders')
+      .update({ customer_document: documentDraft.replace(/\D/g, '') || null })
+      .eq('id', selectedOrder.id)
+    if (error) {
+      toast.error(
+        error.message.includes('customer_document')
+          ? 'Execute supabase/fiscal.sql no Supabase.'
+          : error.message,
+      )
+      return
+    }
+    toast.success('Documento salvo')
+    setSelectedOrder({ ...selectedOrder, customer_document: documentDraft.replace(/\D/g, '') || null })
+  }
+
+  const printLabel = () => {
+    if (!selectedOrder) return
+    const okPrint = printOrderShippingLabel(selectedOrder, orderItems)
+    if (!okPrint) toast.error('Permita pop-ups para imprimir a etiqueta.')
+  }
+
+  const requestNfe = async () => {
+    if (!selectedOrder) return
+    setNfeLoading(true)
+    try {
+      const res = await fetch('/api/admin/nfe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: selectedOrder.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || 'Nao foi possivel solicitar NF-e.')
+        if (data.nfe_status) {
+          setSelectedOrder({ ...selectedOrder, nfe_status: data.nfe_status })
+        }
+        return
+      }
+      toast.success('NF-e solicitada.')
+      await reload()
+    } catch {
+      toast.error('Falha ao falar com a API de NF-e.')
+    } finally {
+      setNfeLoading(false)
+    }
   }
 
   const uploadProductImage = async (file: File | null) => {
@@ -442,6 +501,9 @@ export default function AdminPage() {
           ))}
         </nav>
         <div className="admin-sidebar-foot">
+          <button type="button" className="admin-theme-toggle" onClick={toggleTheme}>
+            Tema: {theme === 'dark' ? 'Escuro' : 'Claro'} (alternar)
+          </button>
           <button type="button" onClick={() => reload()} disabled={loadingData}>
             {loadingData ? 'Atualizando...' : 'Atualizar dados'}
           </button>
@@ -586,6 +648,17 @@ export default function AdminPage() {
                   />
                   Frete grátis
                 </label>
+                <label>
+                  Estoque (qtd)
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={form.stock_qty}
+                    onChange={(e) => setForm({ ...form, stock_qty: e.target.value })}
+                    placeholder="Opcional"
+                  />
+                </label>
               </div>
               {form.image_url ? (
                 <div className="admin-preview"><img src={form.image_url} alt="Prévia" /></div>
@@ -617,6 +690,7 @@ export default function AdminPage() {
                       <p>{formatPrice(p.price)}</p>
                       <span className={`stock-pill ${p.in_stock ? 'on' : 'off'}`}>
                         {p.in_stock ? 'Em estoque' : 'Indisponível'}
+                        {p.stock_qty != null ? ` · ${p.stock_qty}` : ''}
                       </span>
                       {p.free_shipping ? <span className="stock-pill on">Frete grátis</span> : null}
                     </div>
@@ -693,6 +767,18 @@ export default function AdminPage() {
                     <span>{selectedOrder.customer_email}</span>
                     <span>{selectedOrder.customer_phone}</span>
                   </div>
+                  <label style={{ display: 'block', marginBottom: 12 }}>
+                    CPF/CNPJ (NF-e)
+                    <input
+                      value={documentDraft}
+                      onChange={(e) => setDocumentDraft(e.target.value)}
+                      placeholder="Somente numeros"
+                      style={{ width: '100%', marginTop: 6 }}
+                    />
+                  </label>
+                  <button type="button" className="admin-btn ghost" onClick={saveDocument} style={{ marginBottom: 12 }}>
+                    Salvar documento
+                  </button>
                   <div className="admin-detail-block">
                     <span>
                       {selectedOrder.shipping_street}, {selectedOrder.shipping_number}
@@ -742,9 +828,24 @@ export default function AdminPage() {
                       style={{ width: '100%', marginTop: 6 }}
                     />
                   </label>
-                  <button type="button" className="admin-btn" onClick={saveTracking} style={{ marginBottom: 16 }}>
-                    Salvar rastreio
-                  </button>
+                  <div className="admin-row-actions" style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <button type="button" className="admin-btn" onClick={saveTracking}>
+                      Salvar rastreio
+                    </button>
+                    <button type="button" className="admin-btn" onClick={printLabel}>
+                      Imprimir etiqueta
+                    </button>
+                    <button type="button" className="admin-btn ghost" onClick={requestNfe} disabled={nfeLoading}>
+                      {nfeLoading ? 'NF-e...' : 'Solicitar NF-e'}
+                    </button>
+                  </div>
+                  {(selectedOrder.nfe_status || selectedOrder.nfe_number) && (
+                    <p className="admin-meta">
+                      NF-e: {selectedOrder.nfe_status || '—'}
+                      {selectedOrder.nfe_number ? ` · nº ${selectedOrder.nfe_number}` : ''}
+                      {selectedOrder.nfe_error ? ` · ${selectedOrder.nfe_error}` : ''}
+                    </p>
+                  )}
                   <div className="admin-status-actions">
                     {STATUS_FLOW.map((s) => (
                       <button

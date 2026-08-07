@@ -389,24 +389,37 @@ export default function CheckoutPage() {
 
   if (count === 0) {
     return (
-      <div className="container page-pad center-msg">
-        <p>Seu carrinho está vazio.</p>
-        <Link href="/loja" className="btn">Ir à loja</Link>
+      <div className="checkout-page">
+        <div className="container page-pad">
+          <div className="cart-empty">
+            <p className="eyebrow">Checkout</p>
+            <h1>Carrinho vazio</h1>
+            <p>Adicione uma peça da coleção para finalizar a compra.</p>
+            <Link href="/loja" className="btn">
+              Ir à loja
+            </Link>
+          </div>
+        </div>
       </div>
     )
   }
 
   if (!userId) {
     return (
-      <div className="container page-pad">
-        <h1 className="page-title">Finalizar compra</h1>
-        <div className="checkout-layout">
-          <section className="checkout-auth-card">
-            <p className="eyebrow">Quase lá</p>
-            <h2>Para concluir, crie sua conta em 1 minuto</h2>
-            <p className="muted">
-              Assim você acompanha o pedido e fica com os dados salvos para a próxima compra.
-            </p>
+      <div className="checkout-page">
+        <div className="container page-pad">
+          <section className="checkout-hero">
+            <p className="eyebrow">Checkout</p>
+            <h1>Finalizar compra</h1>
+            <p>Crie ou entre na conta para continuar com segurança.</p>
+          </section>
+          <div className="checkout-layout">
+            <section className="checkout-auth-card">
+              <p className="eyebrow">Quase lá</p>
+              <h2>Para concluir, crie sua conta em 1 minuto</h2>
+              <p className="muted">
+                Assim você acompanha o pedido e fica com os dados salvos para a próxima compra.
+              </p>
 
             <div className="checkout-auth-tabs">
               <button
@@ -494,27 +507,38 @@ export default function CheckoutPage() {
             </form>
           </section>
 
-          <aside className="cart-summary">
+          <aside className="cart-summary-v2 checkout-mini-summary">
             <h2>Pedido</h2>
-            <p className="muted" style={{ fontSize: 13 }}>
-              Frete calculado no checkout após informar o CEP.
-            </p>
-            <p className="summary-total"><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
+            <p className="cart-summary-note">Frete calculado no checkout após informar o CEP.</p>
+            <div className="summary-total-row">
+              <span>Subtotal</span>
+              <strong>{formatPrice(subtotal)}</strong>
+            </div>
           </aside>
+        </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container page-pad">
-      <h1 className="page-title">Checkout</h1>
-      <p className="checkout-logged-as muted">
-        Conta: <strong>{form.customer_email}</strong>
-      </p>
-      <form className="checkout-layout" onSubmit={submit}>
-        <div className="checkout-form">
-          <h2>Dados e entrega</h2>
+    <div className="checkout-page">
+      <div className="container page-pad">
+        <section className="checkout-hero">
+          <div>
+            <p className="eyebrow">Checkout</p>
+            <h1>Finalizar compra</h1>
+            <p className="checkout-logged-as">
+              Conta: <strong>{form.customer_email}</strong>
+            </p>
+          </div>
+          <Link href="/carrinho" className="btn btn-outline">
+            Voltar ao carrinho
+          </Link>
+        </section>
+        <form className="checkout-layout" onSubmit={submit}>
+          <div className="checkout-form service-panel">
+            <h2>Dados e entrega</h2>
           <div className="form-grid">
             <label>Nome completo<input required value={form.customer_name} onChange={(e) => set('customer_name', e.target.value)} /></label>
             <label>Email<input type="email" required value={form.customer_email} onChange={(e) => set('customer_email', e.target.value)} /></label>
@@ -611,7 +635,7 @@ export default function CheckoutPage() {
           <label>Observações<textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} rows={3} /></label>
         </div>
 
-        <aside className="cart-summary">
+        <aside className="cart-summary-v2">
           <h2>Pedido</h2>
           <ul className="checkout-items">
             {items.map((i) => (
@@ -659,7 +683,10 @@ export default function CheckoutPage() {
               </strong>
             </p>
           </div>
-          <p className="summary-total"><span>Total</span><strong>{formatPrice(total)}</strong></p>
+          <div className="summary-total-row">
+            <span>Total</span>
+            <strong>{formatPrice(total)}</strong>
+          </div>
           <button type="submit" className="btn btn-block" disabled={loading || !selectedShippingId}>
             {loading
               ? 'Enviando...'
@@ -669,6 +696,7 @@ export default function CheckoutPage() {
           </button>
         </aside>
       </form>
+      </div>
     </div>
   )
 }

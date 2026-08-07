@@ -14,6 +14,7 @@ export default function SetupPage() {
           <li><code>supabase/hardening.sql</code></li>
           <li><code>supabase/commerce-integrations.sql</code></li>
           <li><code>supabase/security.sql</code></li>
+          <li><code>supabase/fiscal.sql</code></li>
           <li><code>supabase/create-admin.sql</code> (somente no SQL Editor, nunca em página pública)</li>
         </ul>
         <Link href="/" className="btn">Voltar à loja</Link>

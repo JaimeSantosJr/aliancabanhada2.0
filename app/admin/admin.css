@@ -1,8 +1,8 @@
 /* Admin console — scoped under .admin-root to beat storefront CSS */
 
 body:has(.admin-root) {
-  background: #09090b !important;
-  color: #f4f1ea !important;
+  background: var(--ad-bg, #09090b) !important;
+  color: var(--ad-text, #f4f1ea) !important;
 }
 
 .admin-root {
@@ -15,9 +15,25 @@ body:has(.admin-root) {
   --ad-gold: #d4af37;
   --ad-gold-soft: #f0d78c;
   --ad-danger: #f07178;
+  --ad-sidebar: linear-gradient(180deg, #0e0e12 0%, #0a0a0d 100%);
+  --ad-input-bg: #0c0c10;
   min-height: 100vh;
   background: var(--ad-bg) !important;
   color: var(--ad-text) !important;
+}
+
+.admin-root[data-theme="light"] {
+  --ad-bg: #f4f1ea;
+  --ad-panel: #ffffff;
+  --ad-panel-2: #faf8f4;
+  --ad-line: #e4dfd4;
+  --ad-text: #1a1a1a;
+  --ad-muted: #6b675e;
+  --ad-gold: #9a7b1a;
+  --ad-gold-soft: #c2a84a;
+  --ad-danger: #b42318;
+  --ad-sidebar: linear-gradient(180deg, #fff 0%, #f7f4ec 100%);
+  --ad-input-bg: #fff;
 }
 
 .admin-root *,
@@ -29,6 +45,24 @@ body:has(.admin-root) {
 .admin-root a {
   color: var(--ad-gold);
   text-decoration: none;
+}
+
+.admin-theme-toggle {
+  border: 1px solid var(--ad-line);
+  background: var(--ad-panel);
+  color: var(--ad-text);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: inherit;
+  width: 100%;
+  text-align: left;
+}
+
+.admin-theme-toggle:hover {
+  border-color: var(--ad-gold);
 }
 
 .admin-loading {
@@ -64,7 +98,7 @@ body:has(.admin-root) {
 }
 
 .admin-sidebar {
-  background: linear-gradient(180deg, #0e0e12 0%, #0a0a0d 100%);
+  background: var(--ad-sidebar);
   border-right: 1px solid var(--ad-line);
   padding: 28px 16px;
   display: flex;

@@ -12,6 +12,7 @@ export interface Product {
   size_range: string | null
   in_stock: boolean
   free_shipping?: boolean | null
+  stock_qty?: number | null
   created_at?: string
   updated_at?: string
   slug?: string | null
@@ -33,6 +34,7 @@ export interface Profile {
   full_name: string | null
   email: string | null
   phone: string | null
+  document?: string | null
   street?: string | null
   number?: string | null
   complement?: string | null
@@ -60,6 +62,13 @@ export interface Order {
   customer_name?: string | null
   customer_email?: string | null
   customer_phone?: string | null
+  customer_document?: string | null
+  nfe_status?: string | null
+  nfe_number?: string | null
+  nfe_access_key?: string | null
+  nfe_pdf_url?: string | null
+  nfe_error?: string | null
+  nfe_issued_at?: string | null
   shipping_street?: string | null
   shipping_number?: string | null
   shipping_complement?: string | null

@@ -14,9 +14,16 @@ export default function CarrinhoPage() {
         <div className="container page-pad">
           <div className="cart-empty">
             <p className="eyebrow">Carrinho</p>
-            <h1>Seu carrinho está vazio</h1>
-            <p>Escolha alianças em banho de ouro ou ouro para começar.</p>
-            <Link href="/loja" className="btn">Explorar coleção</Link>
+            <h1>Sua sacola esta vazia</h1>
+            <p>Escolha aliancas em banho de ouro ou ouro para comecar.</p>
+            <div className="cart-empty__actions">
+              <Link href="/loja" className="btn">
+                Explorar colecao
+              </Link>
+              <Link href="/personalizadas" className="btn btn-outline">
+                Pedido personalizado
+              </Link>
+            </div>
           </div>
         </div>
       </div>
@@ -26,16 +33,18 @@ export default function CarrinhoPage() {
   return (
     <div className="cart-page">
       <div className="container page-pad">
-        <header className="cart-header">
+        <section className="cart-hero">
           <div>
             <p className="eyebrow">Sacola</p>
             <h1>Carrinho</h1>
-            <p>{count} {count === 1 ? 'item' : 'itens'} selecionados</p>
+            <p>
+              {count} {count === 1 ? 'item selecionado' : 'itens selecionados'}
+            </p>
           </div>
           <button type="button" className="linkish" onClick={() => clear()}>
             Limpar carrinho
           </button>
-        </header>
+        </section>
 
         <div className="cart-layout-v2">
           <ul className="cart-list-v2">
@@ -60,9 +69,13 @@ export default function CarrinhoPage() {
                     </p>
                   </div>
                   <div className="qty-control">
-                    <button type="button" onClick={() => updateQuantity(key, item.quantity - 1)}>−</button>
+                    <button type="button" onClick={() => updateQuantity(key, item.quantity - 1)}>
+                      −
+                    </button>
                     <span>{item.quantity}</span>
-                    <button type="button" onClick={() => updateQuantity(key, item.quantity + 1)}>+</button>
+                    <button type="button" onClick={() => updateQuantity(key, item.quantity + 1)}>
+                      +
+                    </button>
                   </div>
                   <div className="cart-side">
                     <strong>{formatPrice(linePrice * item.quantity)}</strong>
@@ -76,26 +89,31 @@ export default function CarrinhoPage() {
           </ul>
 
           <aside className="cart-summary-v2">
-            <h2>Resumo do pedido</h2>
+            <h2>Resumo</h2>
             <div className="summary-rows">
-              <p><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></p>
+              <p>
+                <span>Subtotal</span>
+                <strong>{formatPrice(subtotal)}</strong>
+              </p>
               <p>
                 <span>Frete</span>
                 <strong>No checkout</strong>
               </p>
             </div>
             <div className="summary-total-row">
-              <span>Subtotal</span>
+              <span>Total parcial</span>
               <strong>{formatPrice(subtotal)}</strong>
             </div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-              Frete cotado por CEP no checkout (Melhor Envio).
-            </p>
-            <Link href="/checkout" className="btn btn-block">Finalizar compra</Link>
-            <Link href="/loja" className="btn btn-outline btn-block">Continuar comprando</Link>
+            <p className="cart-summary-note">Frete cotado por CEP no checkout (Melhor Envio).</p>
+            <Link href="/checkout" className="btn btn-block">
+              Finalizar compra
+            </Link>
+            <Link href="/loja" className="btn btn-outline btn-block">
+              Continuar comprando
+            </Link>
             <ul className="cart-notes">
-              <li>Par de alianças: informe os 2 tamanhos</li>
-              <li>Pagamento via Mercado Pago (PIX/cartão)</li>
+              <li>Par de aliancas: informe os 2 tamanhos</li>
+              <li>Pagamento via Mercado Pago (PIX/cartao)</li>
               <li>1 ano de garantia</li>
             </ul>
           </aside>

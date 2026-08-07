@@ -1,50 +1,29 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-// Supabase does not reveal whether an email is already registered, so the
-// fallback stays generic. Validation failures describe the user's own input and
-// are not an enumeration oracle, so surface them.
 function signUpErrorMessage(error: unknown): string {
   const { code, status } = (error ?? {}) as { code?: string; status?: number }
-
-  if (code === 'weak_password') {
-    return 'Por favor, escolha uma senha mais forte.'
-  }
-  // Example and test domains are rejected at validation, before any send.
-  if (code === 'email_address_invalid') {
-    return 'Por favor, use um email real — domínios de teste não são suportados.'
-  }
-  // Built-in SMTP only delivers to addresses in the project's own organization.
+  if (code === 'weak_password') return 'Escolha uma senha mais forte.'
+  if (code === 'email_address_invalid') return 'Use um email real.'
   if (code === 'email_address_not_authorized') {
-    return 'Não podemos enviar email de confirmação para esse endereço. Por favor, use um diferente.'
+    return 'Nao podemos enviar confirmacao para esse endereco. Use outro email.'
   }
-  if (code === 'validation_failed') {
-    return 'Por favor, verifique os detalhes que você digitou.'
-  }
+  if (code === 'validation_failed') return 'Verifique os dados digitados.'
   if (code === 'over_email_send_rate_limit' || status === 429) {
-    return 'Muitas tentativas. Por favor, aguarde um momento e tente novamente.'
+    return 'Muitas tentativas. Aguarde um momento.'
   }
-  return 'Não foi possível completar o cadastro. Por favor, tente novamente.'
+  return 'Nao foi possivel completar o cadastro. Tente novamente.'
 }
 
-export default function Page() {
+export default function SignUpPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [repeatPassword, setRepeatPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -56,7 +35,7 @@ export default function Page() {
     setError(null)
 
     if (password !== repeatPassword) {
-      setError('As senhas não coincidem')
+      setError('As senhas nao coincidem.')
       setIsLoading(false)
       return
     }
@@ -67,8 +46,8 @@ export default function Page() {
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
+      const { error: err } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
         password,
         options: {
           emailRedirectTo:
@@ -76,83 +55,85 @@ export default function Page() {
             `${window.location.origin}/auth/callback`,
         },
       })
-      if (error) throw error
+      if (err) throw err
       router.push('/auth/sign-up-success')
-    } catch (error: unknown) {
-      console.error('Sign-up error:', error)
-      setError(signUpErrorMessage(error))
+    } catch (err: unknown) {
+      setError(signUpErrorMessage(err))
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-      <div className="w-full max-w-sm">
-        <div className="flex flex-col gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Cadastro</CardTitle>
-              <CardDescription>Crie uma nova conta</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSignUp}>
-                <div className="flex flex-col gap-6">
-                  <div className="grid gap-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <div className="flex items-center">
-                      <Label htmlFor="password">Senha</Label>
-                    </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      required
-                      minLength={8}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <div className="flex items-center">
-                      <Label htmlFor="repeat-password">Confirmar Senha</Label>
-                    </div>
-                    <Input
-                      id="repeat-password"
-                      type="password"
-                      required
-                      minLength={8}
-                      value={repeatPassword}
-                      onChange={(e) => setRepeatPassword(e.target.value)}
-                    />
-                  </div>
-                  {error && <p className="text-sm text-red-500">{error}</p>}
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Criando conta...' : 'Cadastrar'}
-                  </Button>
-                </div>
-                <div className="mt-4 text-center text-sm">
-                  Já tem uma conta?{' '}
-                  <Link
-                    href="/auth/login"
-                    className="underline underline-offset-4"
-                  >
-                    Entrar
-                  </Link>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+    <div className="auth-screen">
+      <div className="auth-panel">
+        <p className="auth-eyebrow">Alianca Banhada</p>
+        <h1>Criar conta</h1>
+        <p className="auth-lead">Acompanhe pedidos e salve seus dados de entrega.</p>
+
+        <form onSubmit={handleSignUp} className="auth-form">
+          <label>
+            Email
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              placeholder="seu@email.com"
+            />
+          </label>
+
+          <label>
+            Senha
+            <div className="password-field">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                placeholder="Minimo 8 caracteres"
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              >
+                {showPassword ? 'Ocultar' : 'Ver'}
+              </button>
+            </div>
+          </label>
+
+          <label>
+            Confirmar senha
+            <input
+              type={showPassword ? 'text' : 'password'}
+              required
+              minLength={8}
+              value={repeatPassword}
+              onChange={(e) => setRepeatPassword(e.target.value)}
+              autoComplete="new-password"
+              placeholder="Repita a senha"
+            />
+          </label>
+
+          {error && (
+            <p className="auth-error" role="alert">
+              {error}
+            </p>
+          )}
+
+          <button type="submit" className="btn btn-block" disabled={isLoading}>
+            {isLoading ? 'Criando conta...' : 'Cadastrar'}
+          </button>
+        </form>
+
+        <p className="auth-footer">
+          Ja tem conta? <Link href="/auth/login">Entrar</Link>
+        </p>
       </div>
     </div>
   )

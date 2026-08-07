@@ -245,7 +245,7 @@ export default function ContaPage() {
   return (
     <div className="account-page">
       <div className="container">
-        <header className="account-hero">
+        <section className="account-hero">
           <div className="account-avatar" aria-hidden>
             {initials || 'AB'}
           </div>
@@ -263,11 +263,11 @@ export default function ContaPage() {
             <Link href="/loja" className="btn btn-outline">
               Continuar comprando
             </Link>
-            <button type="button" className="btn btn-outline" onClick={signOut}>
+            <button type="button" className="account-signout" onClick={signOut}>
               Sair
             </button>
           </div>
-        </header>
+        </section>
 
         <div className="account-shell">
           <nav className="account-nav" aria-label="Seções da conta">
